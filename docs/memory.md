@@ -482,4 +482,129 @@ Embeddings are computed **outside** the transaction — retrying a
 transaction that calls Bedrock costs money and latency.
 
 The retry policy is decoupled from connection handling and covered by unit
-tests that run without a live database (`backend/tests/test_retry.py`).
+tests that run without a live database (`backend/tests/backend/tests/test_database_retry.py`).
+
+# 10. Embedding Write Pipeline (T9)
+
+The memory write pipeline converts incoming text into persistent,
+deduplicated vector memories.
+
+## Pipeline
+
+```text
+Raw text
+   |
+   v
+TextChunker
+   |
+   v
+Content hash
+   |
+   +----> Existing DB memory? ---- yes ----> Reuse existing ID
+   |
+   no
+   |
+   v
+In-memory pending-hash deduplication
+   |
+   v
+Batch embedding generation
+   |
+   v
+CockroachDB batch persistence
+   |
+   v
+ON CONFLICT (company_id, content_hash)
+   |
+   +----> New memory ------> Return inserted ID
+   |
+   +----> Duplicate -------> Fetch existing ID
+```
+
+## Chunking
+
+`TextChunker` splits incoming text into chunks of up to 500 words.
+
+This keeps individual embedding requests bounded while allowing larger
+input documents to be processed as multiple memories.
+
+## Content-hash deduplication
+
+Each chunk is assigned a deterministic content hash.
+
+Deduplication happens at two levels:
+
+1. **In-memory deduplication**
+
+   `MemoryWriter` tracks hashes already added to the current pending batch.
+   Repeated chunks are therefore embedded only once.
+
+2. **Database deduplication**
+
+   CockroachDB enforces uniqueness using:
+
+```sql
+UNIQUE INDEX idx_dedup (company_id, content_hash)
+```
+
+Inserts use:
+
+```sql
+ON CONFLICT (company_id, content_hash) DO NOTHING
+RETURNING id
+```
+
+If the insert does not return an ID because the memory already exists,
+the existing ID is fetched by company and content hash.
+
+The database constraint is the final concurrency-safe protection against
+duplicate memories when multiple writers process the same content
+simultaneously.
+
+## Batch embedding generation
+
+Only chunks that are not already present in the database and have not
+already appeared in the current batch are sent to the embedding service.
+
+The embedding service generates embeddings for the pending chunks in one
+batch rather than making one embedding request per chunk.
+
+## Transaction and retry handling
+
+Embedding generation happens **outside** the CockroachDB transaction.
+
+This is intentional: CockroachDB may retry a transaction after a
+serialization failure (`40001`). Re-running an embedding request during
+transaction retry would add unnecessary Bedrock latency and cost.
+
+After embeddings are generated, persistence is performed inside
+`run_in_txn()`, which:
+
+* executes the complete write transaction;
+* retries the entire transaction on `40001`;
+* reacquires a connection for each retry;
+* uses exponential backoff with full jitter;
+* immediately propagates non-retryable database errors.
+
+## Testing
+
+The T9 pipeline is covered by unit tests for:
+
+* text chunking and memory writing;
+* batch persistence;
+* content-hash deduplication;
+* repeated chunks within a single write;
+* returning existing IDs after database conflicts;
+* mixed new and existing memories in a batch;
+* serialization failure retries;
+* retry exhaustion;
+* non-retryable database errors;
+* complete transaction retries.
+
+Relevant tests include:
+
+```text
+backend/tests/test_writer.py
+backend/tests/test_repository.py
+backend/tests/test_database_retry.py
+```

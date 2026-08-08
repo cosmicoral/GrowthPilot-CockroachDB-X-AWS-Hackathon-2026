@@ -136,6 +136,160 @@ async def test_save_memories_batch(monkeypatch):
     assert len(result) == 2
 
 
+@pytest.mark.asyncio
+async def test_save_memories_batch_returns_existing_id_on_conflict(
+    monkeypatch,
+):
+    """
+    T9:
+    Verify batch insertion returns the existing ID when
+    content-hash deduplication prevents an insert.
+    """
+
+    existing_id = uuid4()
+
+    class ConflictConnection:
+        async def fetchval(self, query, *args):
+            if "INSERT INTO memories" in query:
+                return None
+
+            if "content_hash = $2" in query:
+                return existing_id
+
+            raise AssertionError(f"Unexpected query: {query}")
+
+        def transaction(self):
+            return MockSaveTransaction()
+        
+    class ConflictAcquire:
+        async def __aenter__(self):
+            return ConflictConnection()
+
+        async def __aexit__(
+            self,
+            exc_type,
+            exc,
+            traceback,
+        ):
+            return False
+
+    class ConflictPool:
+        def acquire(self):
+            return ConflictAcquire()
+
+    monkeypatch.setattr(
+        database,
+        "pool",
+        ConflictPool(),
+    )
+
+    repository = MemoryRepository()
+
+    memories = [
+        {
+            "company_id": "company-1",
+            "memory_type": "semantic",
+            "content": "Existing memory",
+            "content_hash": "existing-hash",
+            "metadata": {},
+            "importance": 0.5,
+            "embedding": create_test_embedding(),
+        },
+    ]
+
+    result = await repository.save_memories_batch(memories)
+
+    assert result == [existing_id]
+
+
+@pytest.mark.asyncio
+async def test_save_memories_batch_handles_insert_and_conflict(
+    monkeypatch,
+):
+    """
+    T9:
+    Verify a batch can contain both newly inserted and
+    already-existing memories.
+    """
+
+    inserted_id = uuid4()
+    existing_id = uuid4()
+
+    class MixedConnection:
+        def __init__(self):
+            self.insert_calls = 0
+
+        async def fetchval(self, query, *args):
+            if "INSERT INTO memories" in query:
+                self.insert_calls += 1
+
+                if self.insert_calls == 1:
+                    return inserted_id
+
+                return None
+
+            if "content_hash = $2" in query:
+                return existing_id
+
+            raise AssertionError(f"Unexpected query: {query}")
+
+        def transaction(self):
+            return MockSaveTransaction()
+
+    connection = MixedConnection()
+
+    class MixedAcquire:
+        async def __aenter__(self):
+            return connection
+
+        async def __aexit__(
+            self,
+            exc_type,
+            exc,
+            traceback,
+        ):
+            return False
+
+    class MixedPool:
+        def acquire(self):
+            return MixedAcquire()
+
+    monkeypatch.setattr(
+        database,
+        "pool",
+        MixedPool(),
+    )
+
+    repository = MemoryRepository()
+
+    memories = [
+        {
+            "company_id": "company-1",
+            "memory_type": "semantic",
+            "content": "New memory",
+            "content_hash": "new-hash",
+            "metadata": {},
+            "importance": 0.5,
+            "embedding": create_test_embedding(),
+        },
+        {
+            "company_id": "company-1",
+            "memory_type": "semantic",
+            "content": "Existing memory",
+            "content_hash": "existing-hash",
+            "metadata": {},
+            "importance": 0.5,
+            "embedding": create_test_embedding(),
+        },
+    ]
+
+    result = await repository.save_memories_batch(memories)
+
+    assert result == [
+        inserted_id,
+        existing_id,
+    ]
+
 # ---------------------------------------------------------------------------
 # Search helpers and mocks
 # ---------------------------------------------------------------------------
