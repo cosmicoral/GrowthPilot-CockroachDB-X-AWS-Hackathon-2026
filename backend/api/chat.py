@@ -1,0 +1,79 @@
+import json
+import logging
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from backend.api.deps import get_current_company_id
+from backend.llm.client import BedrockClient
+from backend.memory.embedding import BedrockEmbeddingService
+from backend.memory.repository import MemoryRepository
+
+router = APIRouter(prefix="/api/chat", tags=["Chat"])
+logger = logging.getLogger(__name__)
+
+
+class ChatRequest(BaseModel):
+    message: str
+
+
+@router.post("/stream")
+async def chat_stream(
+    request: ChatRequest,
+    company_id: UUID = Depends(get_current_company_id),
+):
+    """
+    Stream a chat response from the AI, augmented with relevant memories.
+    """
+    bedrock = BedrockClient()
+    embedding_service = BedrockEmbeddingService(bedrock)
+    repo = MemoryRepository(embedding_service=embedding_service)
+
+    # 1. Search for relevant memories based on the user's message
+    try:
+        memories = await repo.search(
+            company_id=company_id,
+            query=request.message,
+            k=3,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Memory retrieval failed for company %s, continuing without context: %s",
+            company_id,
+            exc,
+        )
+        memories = []
+
+    # 2. Build the system prompt with retrieved context
+    context_text = "\n".join(m.content for m in memories)
+    system_prompt = (
+        "You are GrowthPilot, an AI assistant for this company.\n"
+        "Here is some relevant context from your memory:\n"
+        f"{context_text}\n\n"
+        "Answer the user's question concisely."
+    )
+
+    # 3. Stream the response using Server-Sent Events (SSE)
+    async def sse_generator():
+        try:
+            async for chunk in bedrock.generate_text_stream(
+                prompt=request.message,
+                system_prompt=system_prompt,
+            ):
+                data = json.dumps({"type": "token", "text": chunk})
+                yield f"data: {data}\n\n"
+
+            # Signal a clean finish so the frontend knows the stream ended normally
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+        except Exception as exc:
+            # Signal an error so the frontend can show a proper message
+            # instead of silently stopping
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        sse_generator(),
+        media_type="text/event-stream",
+    )
