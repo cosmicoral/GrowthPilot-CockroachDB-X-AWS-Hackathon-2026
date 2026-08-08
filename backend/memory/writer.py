@@ -37,11 +37,17 @@ class MemoryWriter:
 
         chunks = self.chunker.chunk_text(text)
 
+        pending_chunks = []
+        pending_hashes = set()
+
         saved_memories = []
 
         for chunk in chunks:
 
             content_hash = create_content_hash(chunk)
+
+            if content_hash in pending_hashes:
+                continue
 
             # Check if this memory already exists before generating embeddings.
             # This avoids duplicate records and unnecessary Bedrock embedding calls.
@@ -57,24 +63,44 @@ class MemoryWriter:
                 saved_memories.append(existing_memory)
                 continue
 
-            embedding = await (
-                self.embedding_service
-                .generate_embedding(chunk)
-            )
+            pending_hashes.add(content_hash)
 
-            memory_id = await (
-                self.repository
-                .save_memory(
-                    company_id = company_id,
-                    memory_type = 'semantic',
-                    content = chunk,
-                    content_hash = content_hash,
-                    metadata = {},
-                    importance = 0.5,
-                    embedding = embedding
-                )
-            )
+            pending_chunks.append({
+                "content": chunk,
+                "content_hash": content_hash
+            })
 
-            saved_memories.append(memory_id)
+        if not pending_chunks:
+            return saved_memories
+
+        texts = [
+            item["content"]
+            for item in pending_chunks
+        ]
+
+        embeddings = await (
+            self.embedding_service
+            .generate_embeddings(texts)
+        )
+
+        memories = []
+
+        for item, embedding in zip(
+            pending_chunks,
+            embeddings
+        ):
+            memories.append({
+                "company_id": company_id,
+                "memory_type": "semantic",
+                "content": item["content"],
+                "content_hash": item["content_hash"],
+                "metadata": {},
+                "importance": 0.5,
+                "embedding": embedding,
+            })
+
+        ids = await self.repository.save_memories_batch(memories)
+
+        saved_memories.extend(ids)
 
         return saved_memories

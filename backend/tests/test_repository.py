@@ -7,7 +7,18 @@ from backend.database.database import database
 from backend.memory.repository import MemoryRepository
 from backend.memory.store import MemoryHit
 
+
+# ---------------------------------------------------------------------------
 # Save-memory mocks
+# ---------------------------------------------------------------------------
+
+
+class MockSaveTransaction:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
 
 
 class MockConnection:
@@ -17,6 +28,9 @@ class MockConnection:
 
     async def fetchval(self, query, *args):
         return 1
+
+    def transaction(self):
+        return MockSaveTransaction()
 
 
 class MockAcquire:
@@ -49,10 +63,8 @@ def create_test_embedding():
     """
     Return a deterministic 1024-dimensional test embedding.
     """
-
     embedding = [0.0] * 1024
     embedding[0] = 1.0
-
     return embedding
 
 
@@ -61,7 +73,6 @@ async def test_save_memory(monkeypatch):
     """
     save_memory should return the ID produced by the database.
     """
-
     monkeypatch.setattr(
         database,
         "pool",
@@ -85,7 +96,49 @@ async def test_save_memory(monkeypatch):
     assert result == 1
 
 
+@pytest.mark.asyncio
+async def test_save_memories_batch(monkeypatch):
+    """
+    T9:
+    Verify batch memory insertion.
+    """
+    monkeypatch.setattr(
+        database,
+        "pool",
+        MockPool(),
+    )
+
+    repository = MemoryRepository()
+
+    memories = [
+        {
+            "company_id": "company-1",
+            "memory_type": "semantic",
+            "content": "First memory",
+            "content_hash": "hash-1",
+            "metadata": {},
+            "importance": 0.5,
+            "embedding": create_test_embedding(),
+        },
+        {
+            "company_id": "company-1",
+            "memory_type": "semantic",
+            "content": "Second memory",
+            "content_hash": "hash-2",
+            "metadata": {},
+            "importance": 0.5,
+            "embedding": create_test_embedding(),
+        },
+    ]
+
+    result = await repository.save_memories_batch(memories)
+
+    assert len(result) == 2
+
+
+# ---------------------------------------------------------------------------
 # Search helpers and mocks
+# ---------------------------------------------------------------------------
 
 
 class FakeSearchEmbeddingService:
@@ -101,7 +154,6 @@ class FakeSearchEmbeddingService:
         text,
     ):
         self.calls.append(text)
-
         return create_test_embedding()
 
 
@@ -161,9 +213,6 @@ class MockSearchPool:
         return MockSearchAcquire(self.connection)
 
 
-# Search test
-
-
 @pytest.mark.asyncio
 async def test_search_uses_vector_candidates_and_hybrid_ranking(
     monkeypatch,
@@ -221,11 +270,13 @@ async def test_search_uses_vector_candidates_and_hybrid_ranking(
 
     embedding_service = FakeSearchEmbeddingService()
 
-    repository = MemoryRepository(embedding_service=embedding_service)
+    repository = MemoryRepository(
+        embedding_service=embedding_service
+    )
 
     results = await repository.search(
         company_id=company_id,
-        query=("What messaging worked best in our previous campaign?"),
+        query="What messaging worked best in our previous campaign?",
         k=5,
         types=[
             "reflection",
@@ -241,40 +292,38 @@ async def test_search_uses_vector_candidates_and_hybrid_ranking(
 
     assert results[0].id == memory_id
     assert results[0].company_id == company_id
-
-    assert results[0].memory_type == ("reflection")
-
+    assert results[0].memory_type == "reflection"
     assert results[0].similarity == 0.95
 
     assert "engineering workflows" in results[0].content
 
-    # The embedding service should receive the original query.
-    assert embedding_service.calls == [("What messaging worked best in our previous campaign?")]
+    assert embedding_service.calls == [
+        "What messaging worked best in our previous campaign?"
+    ]
 
-    # Candidate stage must preserve the vector-search query shape.
     assert "AS MATERIALIZED" in connection.query
-
     assert "WHERE company_id = $1" in connection.query
-
     assert "embedding <=> $2::VECTOR(1024)" in connection.query
 
-    candidate_query_end = connection.query.index("FROM candidates")
+    candidate_query_end = connection.query.index(
+        "FROM candidates"
+    )
 
-    type_filter_position = connection.query.rindex("$4::STRING[] IS NULL")
+    type_filter_position = connection.query.rindex(
+        "$4::STRING[] IS NULL"
+    )
 
-    since_filter_position = connection.query.rindex("$5::TIMESTAMPTZ IS NULL")
+    since_filter_position = connection.query.rindex(
+        "$5::TIMESTAMPTZ IS NULL"
+    )
 
     assert type_filter_position > candidate_query_end
     assert since_filter_position > candidate_query_end
 
-    # Hybrid ranking must contain recency and importance.
     assert "POWER" in connection.query
     assert "GREATEST(importance" in connection.query
 
-    # Verify arguments sent into CockroachDB.
     assert connection.args[0] == company_id
-
-    # max(50, k * 10), where k is 5.
     assert connection.args[2] == 50
 
     assert connection.args[3] == [
@@ -283,6 +332,11 @@ async def test_search_uses_vector_candidates_and_hybrid_ranking(
 
     assert connection.args[4] is None
     assert connection.args[5] == 5
+
+
+# ---------------------------------------------------------------------------
+# Write helpers and mocks
+# ---------------------------------------------------------------------------
 
 
 class MockTransaction:
@@ -296,7 +350,6 @@ class MockTransaction:
         self,
     ):
         self.events.append("transaction_enter")
-
         return self
 
     async def __aexit__(
@@ -306,7 +359,6 @@ class MockTransaction:
         traceback,
     ):
         self.events.append("transaction_exit")
-
         return False
 
 
@@ -357,9 +409,7 @@ class RecordingEmbeddingService:
         text,
     ):
         self.events.append("embedding")
-
         self.calls.append(text)
-
         return create_test_embedding()
 
 
@@ -392,13 +442,14 @@ class MockWriteConnection:
         )
 
         if "INSERT INTO memories" in query:
-            # Simulate ON CONFLICT DO NOTHING.
             return None
 
         if "content_hash = $2" in query:
             return self.existing_id
 
-        raise AssertionError(f"Unexpected query: {query}")
+        raise AssertionError(
+            f"Unexpected query: {query}"
+        )
 
 
 @pytest.mark.asyncio
@@ -421,12 +472,14 @@ async def test_write_is_idempotent_and_embeds_before_transaction(
 
     embedding_service = RecordingEmbeddingService(events)
 
-    repository = MemoryRepository(embedding_service=embedding_service)
+    repository = MemoryRepository(
+        embedding_service=embedding_service
+    )
 
     result = await repository.write(
         company_id=uuid4(),
         memory_type="reflection",
-        content=("Engineering workflow posts performed better."),
+        content="Engineering workflow posts performed better.",
         metadata={
             "source": "analytics-agent",
         },
@@ -435,15 +488,23 @@ async def test_write_is_idempotent_and_embeds_before_transaction(
 
     assert result == existing_id
 
-    assert embedding_service.calls == [("Engineering workflow posts performed better.")]
+    assert embedding_service.calls == [
+        "Engineering workflow posts performed better."
+    ]
 
-    assert events.index("embedding") < events.index("transaction_enter")
+    assert events.index("embedding") < events.index(
+        "transaction_enter"
+    )
 
     insert_query = connection.queries[0][0]
 
     assert "ON CONFLICT (company_id, content_hash)" in insert_query
-
     assert "DO NOTHING" in insert_query
+
+
+# ---------------------------------------------------------------------------
+# Recent-memory helpers and mocks
+# ---------------------------------------------------------------------------
 
 
 class MockRecentConnection:
@@ -545,9 +606,15 @@ async def test_recent_returns_memory_hits_in_time_order(
         older_id,
     ]
 
-    assert all(isinstance(result, MemoryHit) for result in results)
+    assert all(
+        isinstance(result, MemoryHit)
+        for result in results
+    )
 
-    assert all(result.similarity is None for result in results)
+    assert all(
+        result.similarity is None
+        for result in results
+    )
 
     assert "ORDER BY created_at DESC" in connection.query
 

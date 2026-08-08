@@ -234,6 +234,7 @@ class MemoryRepository:
             $6,
             $7::VECTOR(1024)
         )
+        ON CONFLICT (company_id, content_hash) DO NOTHING
         RETURNING id;
         """
 
@@ -251,7 +252,81 @@ class MemoryRepository:
                 embedding_vector,
             )
 
-        return memory_id
+        if memory_id is not None:
+            return memory_id
+
+        return await connection.fetchval(
+            SELECT_BY_HASH_SQL,
+            company_id,
+            content_hash,
+        )
+
+    async def save_memories_batch(
+        self,
+        memories: list[dict]
+    ):
+        """
+        Insert multiple memories in one transaction.
+
+        CockroachDB transactions may fail with
+        serialization errors, therefore run through
+        retry wrapper.
+        """
+
+        async def transaction(conn):
+
+            ids = []
+
+            query = """
+            INSERT INTO memories
+            (
+                company_id,
+                memory_type,
+                content,
+                content_hash,
+                metadata,
+                importance,
+                embedding
+            )
+            VALUES
+            (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                $7::VECTOR(1024)
+            )
+            ON CONFLICT (company_id, content_hash) DO NOTHING
+            RETURNING id;
+            """
+
+            for memory in memories:
+
+                memory_id = await conn.fetchval(
+                    query,
+                    memory["company_id"],
+                    memory["memory_type"],
+                    memory["content"],
+                    memory["content_hash"],
+                    memory["metadata"],
+                    memory["importance"],
+                    to_vector_literal(memory["embedding"]),
+                )
+
+                if memory_id is None:
+                    memory_id = await conn.fetchval(
+                        SELECT_BY_HASH_SQL,
+                        memory["company_id"],
+                        memory["content_hash"],
+                    )
+
+                ids.append(memory_id)
+
+            return ids
+
+        return await run_in_txn(transaction)
 
     async def get_memory(self, memory_id):
         """
