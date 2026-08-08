@@ -48,7 +48,7 @@ class BedrockClient:
         self,
         prompt: str,
         system_prompt: str | None = None,
-        model_id: str = "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model_id: str = "anthropic.claude-sonnet-4-6",
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> str:
@@ -84,7 +84,7 @@ class BedrockClient:
         self,
         prompt: str,
         system_prompt: str | None = None,
-        model_id: str = "anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model_id: str = "anthropic.claude-sonnet-4-6",
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ):

@@ -55,7 +55,7 @@ async def test_generate_text(mock_boto3_client):
     mock_boto3_client.invoke_model.assert_called_once()
 
     call_args = mock_boto3_client.invoke_model.call_args[1]
-    assert call_args["modelId"] == "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    assert call_args["modelId"] == "anthropic.claude-sonnet-4-6"
     body = json.loads(call_args["body"])
     assert body["system"] == "be helpful"
     assert body["messages"][0]["content"][0]["text"] == "generate a marketing slogan"
