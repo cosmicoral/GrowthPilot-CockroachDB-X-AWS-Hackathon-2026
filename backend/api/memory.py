@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from backend.api.deps import get_current_company_id
 from backend.llm.client import BedrockClient
+from backend.memory.embedding import BedrockEmbeddingService
 from backend.memory.repository import MemoryRepository
 from backend.memory.store import MemoryHit, MemoryType
 
@@ -26,7 +27,7 @@ async def search_memories(
     """
     Search for memories belonging to the authenticated company.
     """
-    embedding_service = BedrockClient()
+    embedding_service = BedrockEmbeddingService(BedrockClient())
     repository = MemoryRepository(embedding_service=embedding_service)
 
     try:

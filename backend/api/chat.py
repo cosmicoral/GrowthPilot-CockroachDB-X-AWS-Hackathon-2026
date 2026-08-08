@@ -1,4 +1,5 @@
 import json
+import logging
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,9 +8,11 @@ from pydantic import BaseModel
 
 from backend.api.deps import get_current_company_id
 from backend.llm.client import BedrockClient
+from backend.memory.embedding import BedrockEmbeddingService
 from backend.memory.repository import MemoryRepository
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
+logger = logging.getLogger(__name__)
 
 
 class ChatRequest(BaseModel):
@@ -25,7 +28,8 @@ async def chat_stream(
     Stream a chat response from the AI, augmented with relevant memories.
     """
     bedrock = BedrockClient()
-    repo = MemoryRepository(embedding_service=bedrock)
+    embedding_service = BedrockEmbeddingService(bedrock)
+    repo = MemoryRepository(embedding_service=embedding_service)
 
     # 1. Search for relevant memories based on the user's message
     try:
@@ -34,7 +38,12 @@ async def chat_stream(
             query=request.message,
             k=3,
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Memory retrieval failed for company %s, continuing without context: %s",
+            company_id,
+            exc,
+        )
         memories = []
 
     # 2. Build the system prompt with retrieved context
@@ -48,12 +57,21 @@ async def chat_stream(
 
     # 3. Stream the response using Server-Sent Events (SSE)
     async def sse_generator():
-        async for chunk in bedrock.generate_text_stream(
-            prompt=request.message,
-            system_prompt=system_prompt,
-        ):
-            data = json.dumps({"text": chunk})
-            yield f"data: {data}\n\n"
+        try:
+            async for chunk in bedrock.generate_text_stream(
+                prompt=request.message,
+                system_prompt=system_prompt,
+            ):
+                data = json.dumps({"text": chunk})
+                yield f"data: {data}\n\n"
+
+            # Signal a clean finish so the frontend knows the stream ended normally
+            yield f"data: {json.dumps({'event': 'done'})}\n\n"
+
+        except Exception as exc:
+            # Signal an error so the frontend can show a proper message
+            # instead of silently stopping
+            yield f"data: {json.dumps({'event': 'error', 'detail': str(exc)})}\n\n"
 
     return StreamingResponse(
         sse_generator(),

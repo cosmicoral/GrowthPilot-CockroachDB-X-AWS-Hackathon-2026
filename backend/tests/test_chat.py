@@ -12,34 +12,73 @@ app = FastAPI()
 app.include_router(chat_router)
 client = TestClient(app)
 
+
 @patch("backend.api.chat.MemoryRepository")
 @patch("backend.api.chat.BedrockClient")
 def test_chat_stream_success(mock_bedrock_class, mock_repo_class):
+    """Stream should yield text chunks followed by a done terminal event."""
     company_id = uuid4()
     app.dependency_overrides[get_current_company_id] = lambda: company_id
-    
+
     mock_repo_instance = AsyncMock()
     mock_repo_class.return_value = mock_repo_instance
     mock_repo_instance.search.return_value = []
-    
+
     mock_bedrock_instance = AsyncMock()
     mock_bedrock_class.return_value = mock_bedrock_instance
-    
+
     async def fake_stream(*args, **kwargs):
         yield "Hello"
         yield " World"
-        
+
     mock_bedrock_instance.generate_text_stream = fake_stream
-    
+
     payload = {"message": "Hi"}
-    
-    # Use client.post to test a StreamingResponse directly
+
     response = client.post("/api/chat/stream", json=payload)
-    
+
     assert response.status_code == status.HTTP_200_OK
     content = response.text
-    
+
     assert 'data: {"text": "Hello"}\n\n' in content
     assert 'data: {"text": " World"}\n\n' in content
-        
+    # A clean finish must emit a done terminal event
+    assert 'data: {"event": "done"}\n\n' in content
+
+    app.dependency_overrides.clear()
+
+
+@patch("backend.api.chat.MemoryRepository")
+@patch("backend.api.chat.BedrockClient")
+def test_chat_stream_error_event(mock_bedrock_class, mock_repo_class):
+    """A mid-stream crash should emit an error terminal event instead of silently stopping."""
+    company_id = uuid4()
+    app.dependency_overrides[get_current_company_id] = lambda: company_id
+
+    mock_repo_instance = AsyncMock()
+    mock_repo_class.return_value = mock_repo_instance
+    mock_repo_instance.search.return_value = []
+
+    mock_bedrock_instance = AsyncMock()
+    mock_bedrock_class.return_value = mock_bedrock_instance
+
+    async def failing_stream(*args, **kwargs):
+        yield "Starting..."
+        raise RuntimeError("Bedrock connection lost")
+
+    mock_bedrock_instance.generate_text_stream = failing_stream
+
+    payload = {"message": "Hi"}
+
+    response = client.post("/api/chat/stream", json=payload)
+
+    assert response.status_code == status.HTTP_200_OK
+    content = response.text
+
+    # The partial chunk should still have been sent
+    assert 'data: {"text": "Starting..."}\n\n' in content
+    # An error terminal event should be emitted with the error detail
+    assert '"event": "error"' in content
+    assert "Bedrock connection lost" in content
+
     app.dependency_overrides.clear()
