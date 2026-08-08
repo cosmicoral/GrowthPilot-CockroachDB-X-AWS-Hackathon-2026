@@ -40,10 +40,10 @@ def test_chat_stream_success(mock_bedrock_class, mock_repo_class):
     assert response.status_code == status.HTTP_200_OK
     content = response.text
 
-    assert 'data: {"text": "Hello"}\n\n' in content
-    assert 'data: {"text": " World"}\n\n' in content
+    assert 'data: {"type": "token", "text": "Hello"}\n\n' in content
+    assert 'data: {"type": "token", "text": " World"}\n\n' in content
     # A clean finish must emit a done terminal event
-    assert 'data: {"event": "done"}\n\n' in content
+    assert 'data: {"type": "done"}\n\n' in content
 
     app.dependency_overrides.clear()
 
@@ -76,9 +76,9 @@ def test_chat_stream_error_event(mock_bedrock_class, mock_repo_class):
     content = response.text
 
     # The partial chunk should still have been sent
-    assert 'data: {"text": "Starting..."}\n\n' in content
+    assert 'data: {"type": "token", "text": "Starting..."}\n\n' in content
     # An error terminal event should be emitted with the error detail
-    assert '"event": "error"' in content
+    assert '"type": "error"' in content
     assert "Bedrock connection lost" in content
 
     app.dependency_overrides.clear()

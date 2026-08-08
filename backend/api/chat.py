@@ -62,16 +62,16 @@ async def chat_stream(
                 prompt=request.message,
                 system_prompt=system_prompt,
             ):
-                data = json.dumps({"text": chunk})
+                data = json.dumps({"type": "token", "text": chunk})
                 yield f"data: {data}\n\n"
 
             # Signal a clean finish so the frontend knows the stream ended normally
-            yield f"data: {json.dumps({'event': 'done'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         except Exception as exc:
             # Signal an error so the frontend can show a proper message
             # instead of silently stopping
-            yield f"data: {json.dumps({'event': 'error', 'detail': str(exc)})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(exc)})}\n\n"
 
     return StreamingResponse(
         sse_generator(),
