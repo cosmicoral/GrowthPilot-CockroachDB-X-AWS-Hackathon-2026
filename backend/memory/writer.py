@@ -85,6 +85,12 @@ class MemoryWriter:
 
         memories = []
 
+        if len(embeddings) != len(pending_chunks):
+            raise ValueError(
+                "Embedding service returned a different number of embeddings "
+                "than the number of pending chunks"
+            )
+
         for item, embedding in zip(
             pending_chunks,
             embeddings

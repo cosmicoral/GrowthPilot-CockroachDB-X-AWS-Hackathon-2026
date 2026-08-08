@@ -252,14 +252,14 @@ class MemoryRepository:
                 embedding_vector,
             )
 
-        if memory_id is not None:
-            return memory_id
+            if memory_id is not None:
+                return memory_id
 
-        return await connection.fetchval(
-            SELECT_BY_HASH_SQL,
-            company_id,
-            content_hash,
-        )
+            return await connection.fetchval(
+                SELECT_BY_HASH_SQL,
+                company_id,
+                content_hash,
+            )
 
     async def save_memories_batch(
         self,

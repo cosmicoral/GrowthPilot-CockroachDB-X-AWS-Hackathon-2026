@@ -119,10 +119,10 @@ async def with_retry(
     raise AssertionError("unreachable")
 
 async def run_in_txn(
-        fn: Callable[[asyncpg.Connection],Awaitable[T]],
-        *,
-        max_attempts: int = 5,
-        base_delay: float = 0.05,
+    fn: Callable[[asyncpg.Connection],Awaitable[T]],
+    *,
+    max_attempts: int = 5,
+    base_delay: float = 0.05,
 ) -> T:
     """Run `fn` inside a transaction, retrying the whole transaction on 40001.
 
@@ -133,7 +133,7 @@ Bedrock costs money and latency.
     pool = database.pool
 
     if pool is None: 
-            raise RuntimeError("Database Pool is not initialized")
+        raise RuntimeError("Database Pool is not initialized")
 
     async def _attempt() -> T:
     # Acquire inside the retry so a connection that just carried an
