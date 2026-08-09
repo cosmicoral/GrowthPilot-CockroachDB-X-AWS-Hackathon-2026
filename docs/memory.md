@@ -608,3 +608,163 @@ backend/tests/test_writer.py
 backend/tests/test_repository.py
 backend/tests/test_database_retry.py
 ```
+---
+
+# 11. Memory Deduplication and Decay (T11)
+
+The T11 improvement extends the existing exact content-hash deduplication
+with semantic deduplication.
+
+Content hashes detect identical memories, while semantic similarity detects
+different memories that represent the same information.
+
+## Semantic Deduplication Flow
+
+    New Memory
+        |
+        v
+    Generate Embedding
+        |
+        v
+    Exact Hash Check
+        |
+        +----> Existing memory
+        |          |
+        |          v
+        |      Return existing ID
+        |
+        no
+        |
+        v
+    Semantic Similarity Lookup
+        |
+        +----> Similar memory found
+        |          |
+        |          v
+        |      Merge existing memory
+        |
+        no
+        |
+        v
+    Insert new memory
+
+
+## Similarity Threshold
+
+Semantic duplicate detection uses cosine similarity.
+
+Current threshold:
+
+    SEMANTIC_SIMILARITY_THRESHOLD = 0.90
+
+A memory is considered a semantic duplicate when the closest existing memory
+from the same company has a similarity score greater than or equal to this
+threshold.
+
+
+## Tenant-scoped Similar Memory Lookup
+
+Before inserting a new memory, the repository searches for the most similar
+existing memory within the same company.
+
+The lookup uses:
+
+    WHERE company_id = $1
+    ORDER BY embedding <=> $2::VECTOR(1024)
+    LIMIT 1
+
+This ensures:
+
+- memories are only compared inside the same company;
+- tenant isolation is preserved;
+- existing CockroachDB vector similarity search is reused.
+
+
+## Memory Merge Behavior
+
+When a semantic duplicate is detected, the system updates the existing
+memory instead of creating a new record.
+
+Current merge behavior:
+
+- Preserve the existing memory ID.
+- Update metadata with the latest information.
+- Keep the highest importance value:
+
+    GREATEST(existing importance, new importance)
+
+- Update access tracking:
+
+    last_accessed_at = now()
+    access_count = access_count + 1
+
+This allows frequently observed information to become more important over
+time.
+
+
+## Transaction Safety
+
+Semantic lookup and merge are executed inside the CockroachDB transaction
+flow.
+
+The operation is:
+
+1. Check exact content hash.
+2. Search for semantic duplicate.
+3. Merge existing memory or insert a new memory.
+4. Commit transaction.
+
+The transaction is executed through run_in_txn(), providing:
+
+- automatic retry on CockroachDB serialization conflicts (40001);
+- complete transaction retries;
+- safe concurrent memory writes.
+
+
+## Relationship with T9 Deduplication
+
+T11 extends rather than replaces the T9 content-hash deduplication.
+
+The memory layer now uses two deduplication strategies:
+
+| Strategy | Purpose |
+|---|---|
+| Content hash | Detect exact duplicate content |
+| Semantic similarity | Detect different wording with the same meaning |
+
+Together they prevent both exact duplicates and semantically repeated
+memories.
+
+
+## Testing
+
+T11 is covered by repository tests validating:
+
+- semantic duplicate detection;
+- merging memories above the similarity threshold;
+- inserting memories below the similarity threshold;
+- preserving existing content-hash deduplication;
+- transaction-safe merge behavior.
+
+Relevant tests:
+
+    backend/tests/test_repository.py
+
+
+## Future Memory Decay
+
+The memory schema already stores:
+
+    created_at
+    last_accessed_at
+    access_count
+    importance
+
+These fields support future memory decay strategies where older and unused
+memories gradually lose ranking priority.
+
+The current search ranking already combines:
+
+    similarity × recency × importance
+
+allowing important and frequently used memories to remain more visible.

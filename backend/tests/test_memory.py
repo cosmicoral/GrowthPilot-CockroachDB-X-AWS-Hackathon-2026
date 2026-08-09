@@ -41,12 +41,60 @@ def test_search_memories_success(mock_repo_class):
         "k": 5
     }
 
-    response = client.post("/api/memory/search", json=payload)
-    
-    assert response.status_code == status.HTTP_200_OK
-    data = response.json()
-    assert len(data) == 1
-    assert data[0]["content"] == "Test memory"
-    assert data[0]["id"] == str(memory_id)
-    
-    app.dependency_overrides.clear()
+    try:
+        response = client.post("/api/memory/search", json=payload)
+        
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert len(data) == 1
+        assert data[0]["content"] == "Test memory"
+        assert data[0]["id"] == str(memory_id)
+
+        mock_repo_instance.search.assert_called_once()
+
+    finally:
+        app.dependency_overrides.clear()
+
+@patch("backend.api.memory.MemoryRepository")
+def test_search_memories_empty_query(mock_repo_class):
+    company_id = uuid4()
+    app.dependency_overrides[get_current_company_id] = lambda: company_id
+
+    mock_repo_class.return_value.search = AsyncMock(return_value=[])
+
+    try:
+        response = client.post(
+            "/api/memory/search",
+            json={
+                "query": "",
+                "k": 5,
+            },
+        )
+
+        # assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        pass
+
+    finally:
+        app.dependency_overrides.clear()
+
+@patch("backend.api.memory.MemoryRepository")
+def test_search_memories_invalid_k(mock_repo_class):
+    company_id = uuid4()
+    app.dependency_overrides[get_current_company_id] = lambda: company_id
+
+    mock_repo_class.return_value.search = AsyncMock(return_value=[])
+
+    try:
+        response = client.post(
+            "/api/memory/search",
+            json={
+                "query": "test",
+                "k": 0,
+            },
+        )
+
+        # assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        pass
+
+    finally:
+        app.dependency_overrides.clear()

@@ -51,16 +51,16 @@ class MemoryWriter:
 
             # Check if this memory already exists before generating embeddings.
             # This avoids duplicate records and unnecessary Bedrock embedding calls.
-            existing_memory = await (
+            existing_memory_id = await (
                 self.repository.get_by_content_hash(
                     company_id,
                     content_hash
                 )
             )
 
-            if existing_memory:
+            if existing_memory_id:
                 # Reuse existing memory instead of creating a duplicate.
-                saved_memories.append(existing_memory)
+                saved_memories.append(existing_memory_id["id"])
                 continue
 
             pending_hashes.add(content_hash)

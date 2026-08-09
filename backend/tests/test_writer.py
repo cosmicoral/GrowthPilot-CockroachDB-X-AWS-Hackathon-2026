@@ -1,3 +1,5 @@
+import pytest
+
 from uuid import uuid4
 from unittest.mock import AsyncMock, Mock
 
@@ -125,7 +127,7 @@ async def test_memory_writer_skip_duplicate():
 
 
     assert result == [
-        existing_memory
+        existing_memory["id"]
     ]
 
 
@@ -179,3 +181,59 @@ async def test_memory_writer_deduplicates_repeated_chunks():
         "importance": 0.5,
         "embedding": [0.1] * 1024,
     }])
+
+
+async def test_memory_writer_rejects_embedding_count_mismatch():
+    writer, repository, embedding_service = await create_writer()
+
+    writer.chunker.chunk_text = Mock(
+        return_value=[
+            "memory one",
+            "memory two",
+        ]
+    )
+
+    repository.get_by_content_hash = AsyncMock(
+        return_value=None
+    )
+
+    embedding_service.generate_embeddings = AsyncMock(
+        return_value=[
+            [0.1] * 1024
+        ]  # only one embedding, but two chunks
+    )
+
+    with pytest.raises(ValueError):
+        await writer.write(
+            company_id=uuid4(),
+            text="test",
+        )
+
+
+async def test_memory_writer_returns_existing_memories_only():
+
+    writer, repository, embedding_service = await create_writer()
+
+    existing_memory = {
+        "id": 123,
+        "content": "already saved",
+    }
+
+    repository.get_by_content_hash = AsyncMock(
+        return_value=existing_memory
+    )
+
+    embedding_service.generate_embeddings = AsyncMock()
+
+    repository.save_memories_batch = AsyncMock()
+
+    result = await writer.write(
+        company_id=uuid4(),
+        text="already saved",
+    )
+
+    assert result == [existing_memory["id"]]
+
+    embedding_service.generate_embeddings.assert_not_called()
+
+    repository.save_memories_batch.assert_not_called()

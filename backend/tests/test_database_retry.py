@@ -3,8 +3,7 @@ import asyncio
 import asyncpg
 import pytest
 
-from backend.database.database import with_retry
-from backend.database.database import run_in_txn
+from backend.database.database import run_in_txn, with_retry
 
 
 class SerializationFailure(asyncpg.PostgresError):

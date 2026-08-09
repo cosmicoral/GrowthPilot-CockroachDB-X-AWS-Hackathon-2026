@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+import asyncpg
 
 from backend.database.database import database
 from backend.memory.repository import MemoryRepository
@@ -220,18 +221,37 @@ async def test_save_memories_batch_handles_insert_and_conflict(
             self.insert_calls = 0
 
         async def fetchval(self, query, *args):
-            if "INSERT INTO memories" in query:
-                self.insert_calls += 1
 
-                if self.insert_calls == 1:
-                    return inserted_id
+            if "SELECT id" in query:
+                content_hash = args[1]
+
+                if content_hash == "existing-hash":
+                    return existing_id
 
                 return None
 
-            if "content_hash = $2" in query:
-                return existing_id
 
-            raise AssertionError(f"Unexpected query: {query}")
+            if "INSERT INTO memories" in query:
+                self.insert_calls += 1
+
+                return inserted_id
+
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+
+        async def fetchrow(self, query, *args):
+            """
+            No semantic duplicate in this legacy T9 test.
+            """
+            if "embedding <=>" in query:
+                return None
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
 
         def transaction(self):
             return MockSaveTransaction()
@@ -289,6 +309,600 @@ async def test_save_memories_batch_handles_insert_and_conflict(
         inserted_id,
         existing_id,
     ]
+
+
+@pytest.mark.asyncio
+async def test_save_memories_batch_merges_semantically_similar_memory(
+    monkeypatch,
+):
+    """
+    T11:
+    Verify semantically similar memories are merged
+    instead of creating duplicates.
+    """
+
+    existing_id = uuid4()
+
+    class SemanticConnection:
+
+        def transaction(self):
+            return MockSaveTransaction()
+
+
+        async def fetchval(
+            self,
+            query,
+            *args,
+        ):
+            # Exact hash does not exist
+            if "content_hash = $2" in query:
+                return None
+
+
+            # Merge existing memory
+            if "UPDATE memories" in query:
+                return existing_id
+
+
+            # INSERT should not happen
+            if "INSERT INTO memories" in query:
+                raise AssertionError(
+                    "Semantic duplicate should merge, not insert"
+                )
+
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+
+        async def fetchrow(
+            self,
+            query,
+            *args,
+        ):
+            if "embedding <=>" in query:
+                return {
+                    "id": existing_id,
+                    "similarity": 0.95,
+                }
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+
+    class SemanticAcquire:
+
+        async def __aenter__(self):
+            return SemanticConnection()
+
+
+        async def __aexit__(
+            self,
+            exc_type,
+            exc,
+            traceback,
+        ):
+            return False
+
+
+    class SemanticPool:
+
+        def acquire(self):
+            return SemanticAcquire()
+
+
+    monkeypatch.setattr(
+        database,
+        "pool",
+        SemanticPool(),
+    )
+
+
+    repository = MemoryRepository()
+
+
+    result = await repository.save_memories_batch(
+        [
+            {
+                "company_id": "company-1",
+                "memory_type": "semantic",
+                "content": "LinkedIn posts performed well",
+                "content_hash": "new-hash",
+                "metadata": {},
+                "importance": 0.8,
+                "embedding": create_test_embedding(),
+            }
+        ]
+    )
+
+
+    assert result == [
+        existing_id
+    ]
+
+
+@pytest.mark.asyncio
+async def test_save_memories_batch_semantic_merge_keeps_higher_importance(
+    monkeypatch,
+):
+    """
+    T11:
+    Verify semantic merge updates metadata but keeps
+    the higher importance value.
+    """
+
+    existing_id = uuid4()
+
+    captured_args = {}
+
+    class ImportanceConnection:
+
+        def transaction(self):
+            return MockSaveTransaction()
+
+        async def fetchval(
+            self,
+            query,
+            *args,
+        ):
+            if "content_hash = $2" in query:
+                return None
+
+            if "UPDATE memories" in query:
+                captured_args["metadata"] = args[1]
+                captured_args["importance"] = args[2]
+
+                return existing_id
+
+            if "INSERT INTO memories" in query:
+                raise AssertionError(
+                    "Should merge instead of insert"
+                )
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+        async def fetchrow(
+            self,
+            query,
+            *args,
+        ):
+            if "embedding <=>" in query:
+                return {
+                    "id": existing_id,
+                    "similarity": 0.95,
+                }
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+
+    class ImportanceAcquire:
+
+        async def __aenter__(self):
+            return ImportanceConnection()
+
+        async def __aexit__(
+            self,
+            exc_type,
+            exc,
+            traceback,
+        ):
+            return False
+
+
+    class ImportancePool:
+
+        def acquire(self):
+            return ImportanceAcquire()
+
+
+    monkeypatch.setattr(
+        database,
+        "pool",
+        ImportancePool(),
+    )
+
+
+    repository = MemoryRepository()
+
+
+    result = await repository.save_memories_batch(
+        [
+            {
+                "company_id": "company-1",
+                "memory_type": "semantic",
+                "content": "Improved marketing results",
+                "content_hash": "new-hash",
+                "metadata": {
+                    "source": "analytics-agent"
+                },
+                "importance": 0.6,
+                "embedding": create_test_embedding(),
+            }
+        ]
+    )
+
+
+    assert result == [
+        existing_id
+    ]
+
+    assert captured_args["metadata"] == {
+        "source": "analytics-agent"
+    }
+
+    assert captured_args["importance"] == 0.6
+
+
+@pytest.mark.asyncio
+async def test_save_memories_batch_semantic_dedup_is_company_scoped(
+    monkeypatch,
+):
+    """
+    T11:
+    Verify semantic deduplication only happens
+    within the same company.
+    """
+
+    inserted_id = uuid4()
+
+    class CompanyScopedConnection:
+
+        def transaction(self):
+            return MockSaveTransaction()
+
+        async def fetchval(
+            self,
+            query,
+            *args,
+        ):
+            if "content_hash = $2" in query:
+                return None
+
+            if "INSERT INTO memories" in query:
+                return inserted_id
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+        async def fetchrow(
+            self,
+            query,
+            *args,
+        ):
+            if "embedding <=>" in query:
+                # No similar memory exists
+                # for this company
+                return None
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+
+    class CompanyScopedAcquire:
+
+        async def __aenter__(self):
+            return CompanyScopedConnection()
+
+        async def __aexit__(
+            self,
+            exc_type,
+            exc,
+            traceback,
+        ):
+            return False
+
+
+    class CompanyScopedPool:
+
+        def acquire(self):
+            return CompanyScopedAcquire()
+
+
+    monkeypatch.setattr(
+        database,
+        "pool",
+        CompanyScopedPool(),
+    )
+
+
+    repository = MemoryRepository()
+
+
+    result = await repository.save_memories_batch(
+        [
+            {
+                "company_id": "company-new",
+                "memory_type": "semantic",
+                "content": "AI campaign performed well",
+                "content_hash": "new-company-hash",
+                "metadata": {},
+                "importance": 0.5,
+                "embedding": create_test_embedding(),
+            }
+        ]
+    )
+
+
+    assert result == [
+        inserted_id
+    ]
+
+
+@pytest.mark.asyncio
+async def test_save_memories_batch_semantic_merge_retries_transaction(
+    monkeypatch,
+):
+    """
+    T11:
+    Verify semantic merge is retried when CockroachDB
+    reports a serialization failure.
+    """
+
+    existing_id = uuid4()
+
+    attempts = 0
+
+
+    class RetryConnection:
+
+        def transaction(self):
+            return MockSaveTransaction()
+
+
+        async def fetchval(
+            self,
+            query,
+            *args,
+        ):
+            nonlocal attempts
+
+            if "content_hash = $2" in query:
+                return None
+
+            if "UPDATE memories" in query:
+                attempts += 1
+
+                if attempts == 1:
+                    raise asyncpg.exceptions.SerializationError(
+                        "serialization failure"
+                    )
+
+                return existing_id
+
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+
+        async def fetchrow(
+            self,
+            query,
+            *args,
+        ):
+            if "embedding <=>" in query:
+                return {
+                    "id": existing_id,
+                    "similarity": 0.95,
+                }
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+
+    class RetryAcquire:
+
+        async def __aenter__(self):
+            return RetryConnection()
+
+        async def __aexit__(
+            self,
+            exc_type,
+            exc,
+            traceback,
+        ):
+            return False
+
+
+    class RetryPool:
+
+        def acquire(self):
+            return RetryAcquire()
+
+
+    monkeypatch.setattr(
+        database,
+        "pool",
+        RetryPool(),
+    )
+
+
+    repository = MemoryRepository()
+
+
+    result = await repository.save_memories_batch(
+        [
+            {
+                "company_id": "company-1",
+                "memory_type": "semantic",
+                "content": "Repeated campaign insight",
+                "content_hash": "semantic-hash",
+                "metadata": {},
+                "importance": 0.8,
+                "embedding": create_test_embedding(),
+            }
+        ]
+    )
+
+
+    assert result == [
+        existing_id
+    ]
+
+    assert attempts == 2
+
+
+@pytest.mark.asyncio
+async def test_save_memories_batch_inserts_when_similarity_is_below_threshold(
+    monkeypatch,
+):
+    """
+    T11:
+    Verify memories below semantic similarity threshold
+    are inserted as new memories.
+    """
+
+    inserted_id = uuid4()
+
+
+    class LowSimilarityConnection:
+
+        def transaction(self):
+            return MockSaveTransaction()
+
+
+        async def fetchval(
+            self,
+            query,
+            *args,
+        ):
+
+            # No exact hash match
+            if "content_hash = $2" in query:
+                return None
+
+
+            # Insert new memory
+            if "INSERT INTO memories" in query:
+                return inserted_id
+
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+
+        async def fetchrow(
+            self,
+            query,
+            *args,
+        ):
+            # Similarity lookup returns weak match
+            if "embedding <=>" in query:
+                return {
+                    "id": uuid4(),
+                    "similarity": 0.70,
+                }
+
+
+            raise AssertionError(
+                f"Unexpected query: {query}"
+            )
+
+
+    class LowSimilarityAcquire:
+
+        async def __aenter__(self):
+            return LowSimilarityConnection()
+
+
+        async def __aexit__(
+            self,
+            exc_type,
+            exc,
+            traceback,
+        ):
+            return False
+
+
+    class LowSimilarityPool:
+
+        def acquire(self):
+            return LowSimilarityAcquire()
+
+
+    monkeypatch.setattr(
+        database,
+        "pool",
+        LowSimilarityPool(),
+    )
+
+
+    repository = MemoryRepository()
+
+
+    result = await repository.save_memories_batch(
+        [
+            {
+                "company_id": "company-1",
+                "memory_type": "semantic",
+                "content": "Completely different memory",
+                "content_hash": "different-hash",
+                "metadata": {},
+                "importance": 0.5,
+                "embedding": create_test_embedding(),
+            }
+        ]
+    )
+
+
+    assert result == [
+        inserted_id
+    ]
+
+
+async def find_similar_memory(
+    self,
+    *,
+    company_id,
+    embedding,
+    threshold: float,
+):
+    """
+    Find an existing memory with similar meaning
+    within the same company.
+    """
+
+    query = """
+    SELECT
+        id,
+        content,
+        metadata,
+        importance,
+        created_at,
+        1.0 - (embedding <=> $2::VECTOR(1024))
+            AS similarity
+    FROM memories
+    WHERE company_id = $1
+    ORDER BY embedding <=> $2::VECTOR(1024)
+    LIMIT 1;
+    """
+
+    embedding_vector = to_vector_literal(embedding)
+
+    async with database.pool.acquire() as connection:
+        row = await connection.fetchrow(
+            query,
+            company_id,
+            embedding_vector,
+        )
+
+    if row is None:
+        return None
+
+    if row["similarity"] < threshold:
+        return None
+
+    return row
 
 # ---------------------------------------------------------------------------
 # Search helpers and mocks
@@ -777,3 +1391,115 @@ async def test_recent_returns_memory_hits_in_time_order(
         "reflection",
         2,
     )
+
+@pytest.mark.asyncio
+async def test_merge_memory(monkeypatch):
+
+    memory_id = uuid4()
+
+    class MergeConnection:
+
+        async def fetchval(self, query, *args):
+            assert "UPDATE memories" in query
+            return memory_id
+
+
+    class MergeAcquire:
+
+        async def __aenter__(self):
+            return MergeConnection()
+
+        async def __aexit__(
+            self,
+            exc_type,
+            exc,
+            traceback,
+        ):
+            return False
+
+
+    class MergePool:
+
+        def acquire(self):
+            return MergeAcquire()
+
+
+    monkeypatch.setattr(
+        database,
+        "pool",
+        MergePool(),
+    )
+
+
+    repository = MemoryRepository()
+
+    result = await repository.merge_memory(
+        memory_id,
+        {
+            "source": "agent"
+        },
+        0.9,
+    )
+
+    assert result == memory_id
+
+
+@pytest.mark.asyncio
+async def test_write_rejects_invalid_embedding_dimension(monkeypatch):
+    class BadEmbeddingService:
+        async def generate_embedding(self, text):
+            return [0.1, 0.2]
+
+    repository = MemoryRepository(
+        embedding_service=BadEmbeddingService()
+    )
+
+    with pytest.raises(ValueError):
+        await repository.write(
+            company_id=uuid4(),
+            memory_type="semantic",
+            content="test memory",
+        )
+
+
+@pytest.mark.asyncio
+async def test_write_rejects_empty_content():
+    repository = MemoryRepository(
+        embedding_service=FakeSearchEmbeddingService()
+    )
+
+    with pytest.raises(ValueError):
+        await repository.write(
+            company_id=uuid4(),
+            memory_type="semantic",
+            content="   ",
+        )
+
+
+@pytest.mark.asyncio
+async def test_search_rejects_empty_query():
+
+    repository = MemoryRepository(
+        embedding_service=FakeSearchEmbeddingService()
+    )
+
+    with pytest.raises(ValueError):
+        await repository.search(
+            company_id=uuid4(),
+            query="",
+        )
+
+
+@pytest.mark.asyncio
+async def test_search_rejects_invalid_k():
+
+    repository = MemoryRepository(
+        embedding_service=FakeSearchEmbeddingService()
+    )
+
+    with pytest.raises(ValueError):
+        await repository.search(
+            company_id=uuid4(),
+            query="hello",
+            k=0,
+        )

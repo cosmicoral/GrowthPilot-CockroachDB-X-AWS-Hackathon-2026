@@ -1,3 +1,4 @@
+import pytest
 from backend.memory.chunker import TextChunker
 
 
@@ -47,3 +48,36 @@ def test_chunk_text_handles_empty_input():
     chunks = chunker.chunk_text("")
 
     assert chunks == []
+
+
+def test_chunk_text_rejects_invalid_chunk_size():
+
+    chunker = TextChunker()
+
+    with pytest.raises(ValueError):
+        chunker.chunk_text(
+            "some text",
+            chunk_size=0,
+        )
+
+def test_chunk_text_rejects_negative_chunk_size():
+
+    chunker = TextChunker()
+
+    with pytest.raises(ValueError):
+        chunker.chunk_text(
+            "some text",
+            chunk_size=-10,
+        )
+
+def test_chunk_text_handles_extra_whitespace():
+
+    chunker = TextChunker()
+
+    chunks = chunker.chunk_text(
+        "hello    world\n test"
+    )
+
+    assert chunks == [
+        "hello world test"
+    ]
