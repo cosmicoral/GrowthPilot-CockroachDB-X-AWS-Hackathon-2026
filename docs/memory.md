@@ -541,7 +541,7 @@ Deduplication happens at two levels:
 
 2. **Database deduplication**
 
-   CockroachDB enforces uniqueness using:
+   CockroachDB enforces uniqueness within each company using:
 
 ```sql
 UNIQUE INDEX idx_dedup (company_id, content_hash)
@@ -555,13 +555,11 @@ RETURNING id
 ```
 
 If the insert does not return an ID because the memory already exists,
-the existing ID is fetched by company and content hash.
+the repository fetches the existing ID for that company and content hash.
 
-The database constraint is the final concurrency-safe protection against
-duplicate memories when multiple writers process the same content
-simultaneously.
-
-## Batch embedding generation
+`save_memories_batch()` processes each memory sequentially inside a single
+CockroachDB transaction using `_save_or_merge_memory()`. It does not
+perform one bulk SQL INSERT for the entire batch.
 
 Only chunks that are not already present in the database and have not
 already appeared in the current batch are sent to the embedding service.
@@ -585,6 +583,8 @@ After embeddings are generated, persistence is performed inside
 * reacquires a connection for each retry;
 * uses exponential backoff with full jitter;
 * immediately propagates non-retryable database errors.
+
+This retry handling applies to both single-memory and batch writes.
 
 ## Testing
 
@@ -661,6 +661,9 @@ A memory is considered a semantic duplicate when the closest existing memory
 from the same company has a similarity score greater than or equal to this
 threshold.
 
+This is a best-effort semantic deduplication mechanism: it relies on the
+nearest existing memory found during the transaction and is not claimed to
+be fully atomic under concurrent writes.
 
 ## Tenant-scoped Similar Memory Lookup
 
@@ -688,7 +691,7 @@ memory instead of creating a new record.
 Current merge behavior:
 
 - Preserve the existing memory ID.
-- Update metadata with the latest information.
+- Replace metadata with the latest provided metadata.
 - Keep the highest importance value:
 
     GREATEST(existing importance, new importance)
@@ -700,6 +703,9 @@ Current merge behavior:
 
 This allows frequently observed information to become more important over
 time.
+
+Single-memory writes (`write()` and `save_memory()`) and batch writes
+(`save_memories_batch()`) all follow this shared save-or-merge path.
 
 
 ## Transaction Safety
@@ -718,7 +724,7 @@ The transaction is executed through run_in_txn(), providing:
 
 - automatic retry on CockroachDB serialization conflicts (40001);
 - complete transaction retries;
-- safe concurrent memory writes.
+- supports concurrent memory writes through CockroachDB transaction retry.
 
 
 ## Relationship with T9 Deduplication
@@ -744,7 +750,7 @@ T11 is covered by repository tests validating:
 - merging memories above the similarity threshold;
 - inserting memories below the similarity threshold;
 - preserving existing content-hash deduplication;
-- transaction-safe merge behavior.
+- transaction-safe merge behavior for both single and batch writes.
 
 Relevant tests:
 
