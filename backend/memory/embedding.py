@@ -1,3 +1,5 @@
+EMBEDDING_DIMENSION = 1024
+
 class BedrockEmbeddingService:
     """
     Memory-layer embedding service.
@@ -9,22 +11,16 @@ class BedrockEmbeddingService:
     def __init__(self, bedrock_client):
         self.bedrock_client = bedrock_client
 
-    async def generate_embedding(
-        self,
-        text: str,
-    ) -> list[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """
         Generate embedding for memory storage.
         """
 
-        return await (
-            self.bedrock_client
-            .get_embedding(text)
-        )
+        return await self.bedrock_client.get_embedding(text)
 
     async def generate_embeddings(
         self,
-        texts: list[str],
+        texts: list[str]
     ) -> list[list[float]]:
         """
         Generate embeddings for multiple chunks.
@@ -32,10 +28,19 @@ class BedrockEmbeddingService:
         Keeps batching logic here so Bedrock changes stay isolated.
         """
 
+        if not texts:
+            return []
+
         embeddings = []
 
         for text in texts:
             embedding = await self.generate_embedding(text)
+
+            if len(embedding) != EMBEDDING_DIMENSION:
+                raise ValueError(
+                    f"Expected {EMBEDDING_DIMENSION} dimensions, got {len(embedding)}"
+                )
+
             embeddings.append(embedding)
 
         return embeddings

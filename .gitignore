@@ -7,8 +7,11 @@
 *.key
 *.crt
 certs/
+
+# ----------- AWS credentials --------------
 .aws/
-credentials
+**/credentials
+**/config
 
 # ---------- Python / backend ----------
 __pycache__/
@@ -24,6 +27,12 @@ env/
 .coverage
 coverage.xml
 htmlcov/
+
+# ---------- Python tooling -----------
+.pyright/
+.ruff_cache/
+.pyre/
+.pytype/
 
 # ---------- Node / frontend ----------
 node_modules/

@@ -28,20 +28,14 @@ class TextChunker:
         """
 
         if chunk_size <= 0:
-            raise ValueError(
-                "chunk_size must be greater than zero"
-            )
+            raise ValueError("chunk_size must be greater than zero")
 
         words = content.split()
 
         chunks = []
 
         for i in range(0, len(words), chunk_size):
-
-            chunk = " ".join(
-                words[i:i + chunk_size]
-            )
-
+            chunk = " ".join(words[i:i + chunk_size])
             chunks.append(chunk)
 
         return chunks

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
 import ssl
 from typing import Awaitable, Callable, TypeVar
@@ -18,6 +19,7 @@ import asyncpg
 
 from backend.database.config import get_settings
 
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -114,6 +116,14 @@ async def with_retry(
             # Full jitter: without it, two conflicting transactions back off
             # by the same amount and collide again on the retry.
             delay = random.uniform(0, base_delay * (2 ** (attempt - 1)))
+
+            logger.warning(
+                "Transaction serialization failure. Retrying attempt %s/%s after %.3fs",
+                attempt,
+                max_attempts,
+                delay,
+            )
+
             await asyncio.sleep(delay)
 
     raise AssertionError("unreachable")
@@ -148,6 +158,8 @@ Bedrock costs money and latency.
         base_delay=base_delay,
     )
 
+EMBEDDING_DIMENSION = 1024
+
 def to_vector_literal(embedding: list[float]) ->str:
     """Format an embedding for a VECTOR column.
 
@@ -156,4 +168,11 @@ def to_vector_literal(embedding: list[float]) ->str:
 
         INSERT INTO memories (embedding) VALUES ($1::VECTOR(1024))
     """
+
+    if len(embedding) != EMBEDDING_DIMENSION:
+        raise ValueError(
+            f"Expected embedding dimension {EMBEDDING_DIMENSION}, "
+            f"got {len(embedding)}"
+        )
+    
     return "[" + ",".join(repr(float(x)) for x in embedding) + "]"

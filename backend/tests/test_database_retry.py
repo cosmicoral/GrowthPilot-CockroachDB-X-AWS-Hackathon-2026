@@ -3,8 +3,7 @@ import asyncio
 import asyncpg
 import pytest
 
-from backend.database.database import with_retry
-from backend.database.database import run_in_txn
+from backend.database.database import run_in_txn, with_retry
 
 
 class SerializationFailure(asyncpg.PostgresError):
@@ -26,16 +25,14 @@ async def test_with_retry_retries_serialization_failure():
         attempts += 1
 
         if attempts < 3:
-            raise SerializationFailure(
-                "serialization failure"
-            )
+            raise SerializationFailure("serialization failure")
 
         return "success"
 
     result = await with_retry(
         operation,
-        max_attempts=3,
-        base_delay=0,
+        max_attempts = 3,
+        base_delay = 0,
     )
 
     assert result == "success"
@@ -53,15 +50,13 @@ async def test_with_retry_raises_after_max_attempts():
         nonlocal attempts
         attempts += 1
 
-        raise SerializationFailure(
-            "serialization failure"
-        )
+        raise SerializationFailure("serialization failure")
 
     with pytest.raises(SerializationFailure):
         await with_retry(
             operation,
-            max_attempts=3,
-            base_delay=0,
+            max_attempts = 3,
+            base_delay = 0,
         )
 
     assert attempts == 3
@@ -83,15 +78,13 @@ async def test_with_retry_does_not_retry_non_serialization_error():
         nonlocal attempts
         attempts += 1
 
-        raise NonRetryableError(
-            "unique constraint violation"
-        )
+        raise NonRetryableError("unique constraint violation")
 
     with pytest.raises(NonRetryableError):
         await with_retry(
             operation,
-            max_attempts=5,
-            base_delay=0,
+            max_attempts = 5,
+            base_delay = 0,
         )
 
     assert attempts == 1
@@ -164,8 +157,8 @@ async def test_run_in_txn_retries_entire_transaction(monkeypatch):
 
     result = await run_in_txn(
         operation,
-        max_attempts=2,
-        base_delay=0,
+        max_attempts = 2,
+        base_delay = 0,
     )
 
     assert result == "success"
