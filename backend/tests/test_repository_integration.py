@@ -1,3 +1,4 @@
+import json
 from uuid import uuid4
 
 import pytest
@@ -100,8 +101,16 @@ async def test_write_dedup_vector_cast_and_jsonb_round_trip_on_real_cluster():
         assert stored is not None
         assert stored["id"] == first_id
         assert stored["metadata"] == metadata
-        assert stored["embedding_text"].startswith("[1")
-        assert stored["embedding_text"].endswith("]")
+
+        stored_embedding = json.loads(stored["embedding_text"])
+
+        assert len(stored_embedding) == 1024
+        assert stored_embedding[0] == pytest.approx(1.0)
+        assert all(
+            value == pytest.approx(0.0)
+            for value in stored_embedding[1:]
+        )
+
     finally:
         if company_id is not None and database.pool is not None:
             async with database.pool.acquire() as connection:
