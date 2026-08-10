@@ -383,21 +383,17 @@ class MemoryRepository:
                 f"received {len(embedding)}"
             )
 
+        memory = {
+            "company_id": company_id,
+            "memory_type": memory_type,
+            "content": content,
+            "content_hash": content_hash,
+            "metadata": metadata or {},
+            "importance": importance,
+            "embedding": embedding,
+        }
 
-        async def transaction(connection: asyncpg.Connection):
-            return await self._insert_memory(
-                connection,
-                company_id = company_id,
-                memory_type = memory_type,
-                content = content,
-                content_hash = content_hash,
-                metadata = metadata or {},
-                importance = importance,
-                embedding = embedding,
-            )
-
-
-        return await run_in_txn(transaction)
+        return await self._save_memory_input(memory)
 
 
     async def save_memory(
@@ -417,18 +413,27 @@ class MemoryRepository:
         T9 pipeline code.
         """
 
-        async def transaction(connection: asyncpg.Connection):
-            return await self._insert_memory(
-                connection,
-                company_id = company_id,
-                memory_type = memory_type,
-                content = content,
-                content_hash = content_hash,
-                metadata = metadata or {},
-                importance = importance,
-                embedding = embedding
-            )
+        memory = {
+            "company_id": company_id,
+            "memory_type": memory_type,
+            "content": content,
+            "content_hash": content_hash,
+            "metadata": metadata or {},
+            "importance": importance,
+            "embedding": embedding,
+        }
 
+        return await self._save_memory_input(memory)
+
+    async def _save_memory_input(self, memory: MemoryInput):
+
+        # Persist one memory through the transactional merge-or-insert path.
+
+        async def transaction(connection: asyncpg.Connection):
+            return await self._save_or_merge_memory(
+                connection,
+                memory,
+            )
 
         return await run_in_txn(transaction)
 
@@ -710,6 +715,7 @@ class MemoryRepository:
 
         async with database.pool.acquire() as connection:
             return await connection.fetchval(query, memory_id)
+
     async def update_importance(self, memory_id, importance: float):
         """
         Update memory importance score.
@@ -789,97 +795,9 @@ class MemoryRepository:
         SELECT 1;
         """
 
-
         async with database.pool.acquire() as connection:
             result = await connection.fetchval(query)
 
 
         return result == 1
-
-    async def update_importance(self, memory_id, importance: float):
-            """
-            Update memory importance score.
-            """
-
-            if not 0.0 <= importance <= 1.0:
-                raise ValueError("Importance must be between 0 and 1")
-
-
-            query = """
-            UPDATE memories
-            SET importance = $2
-            WHERE id = $1
-            RETURNING id;
-            """
-
-            async with database.pool.acquire() as connection:
-                return await connection.fetchval(query, memory_id, importance)
-
-
-    async def list_by_type(
-        self,
-        *,
-        company_id,
-        memory_type: MemoryType,
-        limit: int = 50,
-    ) -> list[MemoryHit]:
-        """
-        List memories filtered by type.
-
-        Useful for debugging and agent context inspection.
-        """
-
-        if limit <= 0:
-            raise ValueError("Limit must be positive")
-
-
-        query = """
-        SELECT
-            id,
-            company_id,
-            content,
-            memory_type,
-            metadata,
-            importance,
-            created_at
-        FROM memories
-        WHERE company_id = $1
-        AND memory_type = $2
-        ORDER BY created_at DESC
-        LIMIT $3;
-        """
-
-
-        async with database.pool.acquire() as connection:
-            rows = await connection.fetch(
-                query,
-                company_id,
-                memory_type,
-                limit
-            )
-
-
-        return [
-            self._to_memory_hit(row)
-            for row in rows
-        ]
-
-
-    async def health_check(self) -> bool:
-        """
-        Verify repository database connectivity.
-        """
-
-        query = """
-        SELECT 1;
-        """
-
-
-        async with database.pool.acquire() as connection:
-            result = await connection.fetchval(query)
-
-
-        return result == 1
-
-
     

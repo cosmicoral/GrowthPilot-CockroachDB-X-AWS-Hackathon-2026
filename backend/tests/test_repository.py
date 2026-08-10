@@ -703,50 +703,6 @@ async def test_save_memories_batch_inserts_when_similarity_is_below_threshold(
     assert result == [inserted_id]
 
 
-async def find_similar_memory(
-    self,
-    *,
-    company_id,
-    embedding,
-    threshold: float
-):
-    """
-    Find an existing memory with similar meaning
-    within the same company.
-    """
-
-    query = """
-    SELECT
-        id,
-        content,
-        metadata,
-        importance,
-        created_at,
-        1.0 - (embedding <=> $2::VECTOR(1024))
-            AS similarity
-    FROM memories
-    WHERE company_id = $1
-    ORDER BY embedding <=> $2::VECTOR(1024)
-    LIMIT 1;
-    """
-
-    embedding_vector = to_vector_literal(embedding)
-
-    async with database.pool.acquire() as connection:
-        row = await connection.fetchrow(
-            query,
-            company_id,
-            embedding_vector,
-        )
-
-    if row is None:
-        return None
-
-    if row["similarity"] < threshold:
-        return None
-
-    return row
-
 # ---------------------------------------------------------------------------
 # Search helpers and mocks
 # ---------------------------------------------------------------------------
@@ -1027,10 +983,138 @@ async def test_write_is_idempotent_and_embeds_before_transaction(monkeypatch):
 
     assert events.index("embedding") < events.index("transaction_enter")
 
-    insert_query = connection.queries[0][0]
+    lookup_query = connection.queries[0][0]
 
-    assert "ON CONFLICT (company_id, content_hash)" in insert_query
-    assert "DO NOTHING" in insert_query
+    assert "SELECT id" in lookup_query
+    assert "content_hash = $2" in lookup_query
+    assert all(
+        "ON CONFLICT (company_id, content_hash)" not in query[0]
+        for query in connection.queries
+    )
+
+
+@pytest.mark.asyncio
+async def test_write_merges_semantically_similar_memory(monkeypatch):
+    """
+    T11:
+    Verify write() merges a semantically similar memory
+    instead of inserting a duplicate.
+    """
+
+    existing_id = uuid4()
+
+    class MergeConnection:
+        def transaction(self):
+            return MockSaveTransaction()
+
+        async def fetchval(self, query, *args):
+            if "content_hash = $2" in query:
+                return None
+
+            if "UPDATE memories" in query:
+                return existing_id
+
+            raise AssertionError(f"Unexpected query: {query}")
+
+        async def fetchrow(self, query, *args):
+            if "embedding <=>" in query:
+                return {
+                    "id": existing_id,
+                    "similarity": 0.95,
+                }
+
+            raise AssertionError(f"Unexpected query: {query}")
+
+    class MergeAcquire:
+        async def __aenter__(self):
+            return MergeConnection()
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+    class MergePool:
+        def acquire(self):
+            return MergeAcquire()
+
+    monkeypatch.setattr(database, "pool", MergePool())
+
+    class RecordingEmbeddingService:
+        async def generate_embedding(self, text):
+            return create_test_embedding()
+
+    repository = MemoryRepository(
+        embedding_service = RecordingEmbeddingService()
+    )
+
+    result = await repository.write(
+        company_id = uuid4(),
+        memory_type = "semantic",
+        content = "Performance improved across campaigns.",
+        metadata = {},
+        importance = 0.7,
+    )
+
+    assert result == existing_id
+
+
+@pytest.mark.asyncio
+async def test_save_memory_merges_semantically_similar_memory(monkeypatch):
+    """
+    T11:
+    Verify save_memory() merges a semantically similar memory
+    instead of inserting a duplicate.
+    """
+
+    existing_id = uuid4()
+
+    class MergeConnection:
+        def transaction(self):
+            return MockSaveTransaction()
+
+        async def fetchval(self, query, *args):
+            if "content_hash = $2" in query:
+                return None
+
+            if "UPDATE memories" in query:
+                return existing_id
+
+            raise AssertionError(f"Unexpected query: {query}")
+
+        async def fetchrow(self, query, *args):
+            if "embedding <=>" in query:
+                return {
+                    "id": existing_id,
+                    "similarity": 0.95,
+                }
+
+            raise AssertionError(f"Unexpected query: {query}")
+
+    class MergeAcquire:
+        async def __aenter__(self):
+            return MergeConnection()
+
+        async def __aexit__(self, exc_type, exc, traceback):
+            return False
+
+    class MergePool:
+        def acquire(self):
+            return MergeAcquire()
+
+    monkeypatch.setattr(database, "pool", MergePool())
+
+    repository = MemoryRepository()
+
+    result = await repository.save_memory(
+        company_id = "company-1",
+        memory_type = "semantic",
+        content = "Performance improved across campaigns.",
+        content_hash = "new-hash",
+        metadata = {},
+        importance = 0.7,
+        embedding = create_test_embedding(),
+    )
+
+    assert result == existing_id
 
 
 # ---------------------------------------------------------------------------
