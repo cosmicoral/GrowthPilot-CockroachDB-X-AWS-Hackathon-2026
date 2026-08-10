@@ -137,7 +137,6 @@ WHERE company_id = $1
 AND content_hash = $2
 """
 
-
 FIND_SIMILAR_MEMORY_SQL = f"""
 SELECT
     id,

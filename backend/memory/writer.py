@@ -48,7 +48,7 @@ class MemoryWriter:
 
             if existing_memory_id:
                 # Reuse existing memory instead of creating a duplicate.
-                saved_memories.append(existing_memory_id["id"])
+                saved_memories.append(existing_memory_id)
                 continue
 
             pending_hashes.add(content_hash)

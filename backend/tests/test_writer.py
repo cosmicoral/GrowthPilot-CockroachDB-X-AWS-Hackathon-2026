@@ -106,7 +106,7 @@ async def test_memory_writer_skip_duplicate():
 
 
     repository.get_by_content_hash = AsyncMock(
-        return_value = existing_memory
+        return_value = existing_memory['id']
     )
 
 
@@ -143,7 +143,7 @@ async def test_memory_writer_deduplicates_repeated_chunks():
         return_value = [repeated_chunk, repeated_chunk]
     )
 
-    repository.get_by_content_hash = AsyncMock(return_value=None)
+    repository.get_by_content_hash = AsyncMock(return_value = None)
 
     embedding_service.generate_embeddings = AsyncMock(
         return_value = [[0.1] * 1024]
@@ -212,7 +212,7 @@ async def test_memory_writer_returns_existing_memories_only():
     }
 
     repository.get_by_content_hash = AsyncMock(
-        return_value=existing_memory
+        return_value = existing_memory["id"]
     )
 
     embedding_service.generate_embeddings = AsyncMock()
