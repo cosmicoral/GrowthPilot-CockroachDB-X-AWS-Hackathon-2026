@@ -11,22 +11,16 @@ class BedrockEmbeddingService:
     def __init__(self, bedrock_client):
         self.bedrock_client = bedrock_client
 
-    async def generate_embedding(
-        self,
-        text: str,
-    ) -> list[float]:
+    async def generate_embedding(self, text: str) -> list[float]:
         """
         Generate embedding for memory storage.
         """
 
-        return await (
-            self.bedrock_client
-            .get_embedding(text)
-        )
+        return await self.bedrock_client.get_embedding(text)
 
     async def generate_embeddings(
         self,
-        texts: list[str],
+        texts: list[str]
     ) -> list[list[float]]:
         """
         Generate embeddings for multiple chunks.

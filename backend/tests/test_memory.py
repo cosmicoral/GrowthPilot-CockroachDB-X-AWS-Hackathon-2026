@@ -24,14 +24,14 @@ def test_search_memories_success(mock_repo_class):
     
     memory_id = uuid4()
     mock_hit = MemoryHit(
-        id=memory_id,
-        company_id=company_id,
-        content="Test memory",
-        memory_type="user",
-        metadata={},
-        importance=0.5,
-        similarity=0.99,
-        created_at=datetime.now(timezone.utc)
+        id = memory_id,
+        company_id = company_id,
+        content = "Test memory",
+        memory_type = "user",
+        metadata = {},
+        importance = 0.5,
+        similarity = 0.99,
+        created_at = datetime.now(timezone.utc)
     )
     
     mock_repo_instance.search.return_value = [mock_hit]

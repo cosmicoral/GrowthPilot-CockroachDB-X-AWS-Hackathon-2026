@@ -17,16 +17,14 @@ async def create_writer():
 
     bedrock_client = MockBedrockClient()
 
-    bedrock_service = BedrockEmbeddingService(
-        bedrock_client=bedrock_client
-    )
+    bedrock_service = BedrockEmbeddingService(bedrock_client = bedrock_client)
 
     repository = MockMemoryRepository()
 
     writer = MemoryWriter(
-        chunker=chunker,
-        embedding_service=bedrock_service,
-        repository=repository
+        chunker = chunker,
+        embedding_service = bedrock_service,
+        repository = repository
     )
 
     return writer, repository, bedrock_service
@@ -73,15 +71,13 @@ async def test_memory_writer_batch_save():
 
     writer, repository, _ = await create_writer()
 
-    repository.save_memories_batch = AsyncMock(
-        return_value = [1, 2]
-    )
+    repository.save_memories_batch = AsyncMock(return_value = [1, 2])
 
     company_id = uuid4()
 
     result = await writer.write(
-        company_id=company_id,
-        text="""
+        company_id = company_id,
+        text = """
         First memory.
         Second memory.
         """
@@ -110,7 +106,7 @@ async def test_memory_writer_skip_duplicate():
 
 
     repository.get_by_content_hash = AsyncMock(
-        return_value=existing_memory
+        return_value = existing_memory
     )
 
 
@@ -121,8 +117,8 @@ async def test_memory_writer_skip_duplicate():
 
 
     result = await writer.write(
-        company_id=company_id,
-        text="Existing memory"
+        company_id = company_id,
+        text = "Existing memory"
     )
 
 
@@ -144,26 +140,22 @@ async def test_memory_writer_deduplicates_repeated_chunks():
     repeated_chunk = "Repeated memory."
 
     writer.chunker.chunk_text = Mock(
-        return_value=[repeated_chunk, repeated_chunk]
+        return_value = [repeated_chunk, repeated_chunk]
     )
 
-    repository.get_by_content_hash = AsyncMock(
-        return_value=None
-    )
+    repository.get_by_content_hash = AsyncMock(return_value=None)
 
     embedding_service.generate_embeddings = AsyncMock(
-        return_value=[[0.1] * 1024]
+        return_value = [[0.1] * 1024]
     )
 
-    repository.save_memories_batch = AsyncMock(
-        return_value=[1]
-    )
+    repository.save_memories_batch = AsyncMock(return_value=[1])
 
     company_id = uuid4()
 
     result = await writer.write(
-        company_id=company_id,
-        text="Some input"
+        company_id = company_id,
+        text = "Some input"
     )
 
     assert result == [1]
@@ -187,26 +179,26 @@ async def test_memory_writer_rejects_embedding_count_mismatch():
     writer, repository, embedding_service = await create_writer()
 
     writer.chunker.chunk_text = Mock(
-        return_value=[
+        return_value = [
             "memory one",
             "memory two",
         ]
     )
 
     repository.get_by_content_hash = AsyncMock(
-        return_value=None
+        return_value = None
     )
 
     embedding_service.generate_embeddings = AsyncMock(
-        return_value=[
+        return_value = [
             [0.1] * 1024
         ]  # only one embedding, but two chunks
     )
 
     with pytest.raises(ValueError):
         await writer.write(
-            company_id=uuid4(),
-            text="test",
+            company_id = uuid4(),
+            text = "test",
         )
 
 
@@ -228,8 +220,8 @@ async def test_memory_writer_returns_existing_memories_only():
     repository.save_memories_batch = AsyncMock()
 
     result = await writer.write(
-        company_id=uuid4(),
-        text="already saved",
+        company_id = uuid4(),
+        text = "already saved",
     )
 
     assert result == [existing_memory["id"]]

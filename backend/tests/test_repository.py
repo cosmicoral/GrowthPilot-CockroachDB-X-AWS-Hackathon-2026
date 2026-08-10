@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 import asyncpg
 
-from backend.database.database import database
+from backend.database.database import database, to_vector_literal
 from backend.memory.repository import MemoryRepository
 from backend.memory.store import MemoryHit
 
@@ -42,12 +42,7 @@ class MockAcquire:
     async def __aenter__(self):
         return MockConnection()
 
-    async def __aexit__(
-        self,
-        exc_type,
-        exc,
-        traceback,
-    ):
+    async def __aexit__(self, exc_type, exc, traceback):
         return False
 
 
@@ -74,24 +69,20 @@ async def test_save_memory(monkeypatch):
     """
     save_memory should return the ID produced by the database.
     """
-    monkeypatch.setattr(
-        database,
-        "pool",
-        MockPool(),
-    )
+    monkeypatch.setattr(database, "pool", MockPool())
 
     repository = MemoryRepository()
 
     result = await repository.save_memory(
-        company_id="company-1",
-        memory_type="reflection",
-        content="GrowthPilot learned something",
-        content_hash="test-hash-123",
-        metadata={
-            "source": "agent",
+        company_id = "company-1",
+        memory_type = "reflection",
+        content = "GrowthPilot learned something",
+        content_hash = "test-hash-123",
+        metadata = {
+            "source": "agent"
         },
-        importance=0.8,
-        embedding=create_test_embedding(),
+        importance = 0.8,
+        embedding = create_test_embedding()
     )
 
     assert result == 1
@@ -103,34 +94,28 @@ async def test_save_memories_batch(monkeypatch):
     T9:
     Verify batch memory insertion.
     """
-    monkeypatch.setattr(
-        database,
-        "pool",
-        MockPool(),
-    )
+    monkeypatch.setattr(database, "pool", MockPool())
 
     repository = MemoryRepository()
 
-    memories = [
-        {
-            "company_id": "company-1",
-            "memory_type": "semantic",
-            "content": "First memory",
-            "content_hash": "hash-1",
-            "metadata": {},
-            "importance": 0.5,
-            "embedding": create_test_embedding(),
-        },
-        {
-            "company_id": "company-1",
-            "memory_type": "semantic",
-            "content": "Second memory",
-            "content_hash": "hash-2",
-            "metadata": {},
-            "importance": 0.5,
-            "embedding": create_test_embedding(),
-        },
-    ]
+    memories = [{
+        "company_id": "company-1",
+        "memory_type": "semantic",
+        "content": "First memory",
+        "content_hash": "hash-1",
+        "metadata": {},
+        "importance": 0.5,
+        "embedding": create_test_embedding()
+    },
+    {
+        "company_id": "company-1",
+        "memory_type": "semantic",
+        "content": "Second memory",
+        "content_hash": "hash-2",
+        "metadata": {},
+        "importance": 0.5,
+        "embedding": create_test_embedding()
+    }]
 
     result = await repository.save_memories_batch(memories)
 
@@ -166,12 +151,7 @@ async def test_save_memories_batch_returns_existing_id_on_conflict(
         async def __aenter__(self):
             return ConflictConnection()
 
-        async def __aexit__(
-            self,
-            exc_type,
-            exc,
-            traceback,
-        ):
+        async def __aexit__(self, exc_type, exc, traceback):
             return False
 
     class ConflictPool:
@@ -237,9 +217,7 @@ async def test_save_memories_batch_handles_insert_and_conflict(
                 return inserted_id
 
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
 
         async def fetchrow(self, query, *args):
@@ -249,9 +227,7 @@ async def test_save_memories_batch_handles_insert_and_conflict(
             if "embedding <=>" in query:
                 return None
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
         def transaction(self):
             return MockSaveTransaction()
@@ -262,23 +238,14 @@ async def test_save_memories_batch_handles_insert_and_conflict(
         async def __aenter__(self):
             return connection
 
-        async def __aexit__(
-            self,
-            exc_type,
-            exc,
-            traceback,
-        ):
+        async def __aexit__(self, exc_type, exc, traceback):
             return False
 
     class MixedPool:
         def acquire(self):
             return MixedAcquire()
 
-    monkeypatch.setattr(
-        database,
-        "pool",
-        MixedPool(),
-    )
+    monkeypatch.setattr(database, "pool", MixedPool())
 
     repository = MemoryRepository()
 
@@ -329,11 +296,7 @@ async def test_save_memories_batch_merges_semantically_similar_memory(
             return MockSaveTransaction()
 
 
-        async def fetchval(
-            self,
-            query,
-            *args,
-        ):
+        async def fetchval(self, query, *args):
             # Exact hash does not exist
             if "content_hash = $2" in query:
                 return None
@@ -351,25 +314,17 @@ async def test_save_memories_batch_merges_semantically_similar_memory(
                 )
 
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
 
-        async def fetchrow(
-            self,
-            query,
-            *args,
-        ):
+        async def fetchrow(self, query, *args):
             if "embedding <=>" in query:
                 return {
                     "id": existing_id,
                     "similarity": 0.95,
                 }
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
 
     class SemanticAcquire:
@@ -378,12 +333,7 @@ async def test_save_memories_batch_merges_semantically_similar_memory(
             return SemanticConnection()
 
 
-        async def __aexit__(
-            self,
-            exc_type,
-            exc,
-            traceback,
-        ):
+        async def __aexit__(self, exc_type, exc, traceback):
             return False
 
 
@@ -403,24 +353,18 @@ async def test_save_memories_batch_merges_semantically_similar_memory(
     repository = MemoryRepository()
 
 
-    result = await repository.save_memories_batch(
-        [
-            {
-                "company_id": "company-1",
-                "memory_type": "semantic",
-                "content": "LinkedIn posts performed well",
-                "content_hash": "new-hash",
-                "metadata": {},
-                "importance": 0.8,
-                "embedding": create_test_embedding(),
-            }
-        ]
-    )
+    result = await repository.save_memories_batch([{
+        "company_id": "company-1",
+        "memory_type": "semantic",
+        "content": "LinkedIn posts performed well",
+        "content_hash": "new-hash",
+        "metadata": {},
+        "importance": 0.8,
+        "embedding": create_test_embedding()
+    }])
 
 
-    assert result == [
-        existing_id
-    ]
+    assert result == [existing_id]
 
 
 @pytest.mark.asyncio
@@ -442,11 +386,7 @@ async def test_save_memories_batch_semantic_merge_keeps_higher_importance(
         def transaction(self):
             return MockSaveTransaction()
 
-        async def fetchval(
-            self,
-            query,
-            *args,
-        ):
+        async def fetchval(self, query, *args):
             if "content_hash = $2" in query:
                 return None
 
@@ -457,28 +397,18 @@ async def test_save_memories_batch_semantic_merge_keeps_higher_importance(
                 return existing_id
 
             if "INSERT INTO memories" in query:
-                raise AssertionError(
-                    "Should merge instead of insert"
-                )
+                raise AssertionError("Should merge instead of insert")
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
-        async def fetchrow(
-            self,
-            query,
-            *args,
-        ):
+        async def fetchrow(self, query, *args):
             if "embedding <=>" in query:
                 return {
                     "id": existing_id,
-                    "similarity": 0.95,
+                    "similarity": 0.95
                 }
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
 
     class ImportanceAcquire:
@@ -486,12 +416,7 @@ async def test_save_memories_batch_semantic_merge_keeps_higher_importance(
         async def __aenter__(self):
             return ImportanceConnection()
 
-        async def __aexit__(
-            self,
-            exc_type,
-            exc,
-            traceback,
-        ):
+        async def __aexit__(self, exc_type, exc, traceback):
             return False
 
 
@@ -511,26 +436,20 @@ async def test_save_memories_batch_semantic_merge_keeps_higher_importance(
     repository = MemoryRepository()
 
 
-    result = await repository.save_memories_batch(
-        [
-            {
-                "company_id": "company-1",
-                "memory_type": "semantic",
-                "content": "Improved marketing results",
-                "content_hash": "new-hash",
-                "metadata": {
-                    "source": "analytics-agent"
-                },
-                "importance": 0.6,
-                "embedding": create_test_embedding(),
-            }
-        ]
-    )
+    result = await repository.save_memories_batch([{
+        "company_id": "company-1",
+        "memory_type": "semantic",
+        "content": "Improved marketing results",
+        "content_hash": "new-hash",
+        "metadata": {
+            "source": "analytics-agent"
+        },
+        "importance": 0.6,
+        "embedding": create_test_embedding()
+    }])
 
 
-    assert result == [
-        existing_id
-    ]
+    assert result == [existing_id]
 
     assert captured_args["metadata"] == {
         "source": "analytics-agent"
@@ -540,9 +459,7 @@ async def test_save_memories_batch_semantic_merge_keeps_higher_importance(
 
 
 @pytest.mark.asyncio
-async def test_save_memories_batch_semantic_dedup_is_company_scoped(
-    monkeypatch,
-):
+async def test_save_memories_batch_semantic_dedup_is_company_scoped(monkeypatch):
     """
     T11:
     Verify semantic deduplication only happens
@@ -556,34 +473,22 @@ async def test_save_memories_batch_semantic_dedup_is_company_scoped(
         def transaction(self):
             return MockSaveTransaction()
 
-        async def fetchval(
-            self,
-            query,
-            *args,
-        ):
+        async def fetchval(self, query, *args):
             if "content_hash = $2" in query:
                 return None
 
             if "INSERT INTO memories" in query:
                 return inserted_id
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
-        async def fetchrow(
-            self,
-            query,
-            *args,
-        ):
+        async def fetchrow(self, query, *args):
             if "embedding <=>" in query:
                 # No similar memory exists
                 # for this company
                 return None
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
 
     class CompanyScopedAcquire:
@@ -591,17 +496,11 @@ async def test_save_memories_batch_semantic_dedup_is_company_scoped(
         async def __aenter__(self):
             return CompanyScopedConnection()
 
-        async def __aexit__(
-            self,
-            exc_type,
-            exc,
-            traceback,
-        ):
+        async def __aexit__(self, exc_type, exc, traceback):
             return False
 
 
     class CompanyScopedPool:
-
         def acquire(self):
             return CompanyScopedAcquire()
 
@@ -609,31 +508,25 @@ async def test_save_memories_batch_semantic_dedup_is_company_scoped(
     monkeypatch.setattr(
         database,
         "pool",
-        CompanyScopedPool(),
+        CompanyScopedPool()
     )
 
 
     repository = MemoryRepository()
 
 
-    result = await repository.save_memories_batch(
-        [
-            {
-                "company_id": "company-new",
-                "memory_type": "semantic",
-                "content": "AI campaign performed well",
-                "content_hash": "new-company-hash",
-                "metadata": {},
-                "importance": 0.5,
-                "embedding": create_test_embedding(),
-            }
-        ]
-    )
+    result = await repository.save_memories_batch([{
+        "company_id": "company-new",
+        "memory_type": "semantic",
+        "content": "AI campaign performed well",
+        "content_hash": "new-company-hash",
+        "metadata": {},
+        "importance": 0.5,
+        "embedding": create_test_embedding()
+    }])
 
 
-    assert result == [
-        inserted_id
-    ]
+    assert result == [inserted_id]
 
 
 @pytest.mark.asyncio
@@ -657,11 +550,7 @@ async def test_save_memories_batch_semantic_merge_retries_transaction(
             return MockSaveTransaction()
 
 
-        async def fetchval(
-            self,
-            query,
-            *args,
-        ):
+        async def fetchval(self, query, *args):
             nonlocal attempts
 
             if "content_hash = $2" in query:
@@ -678,25 +567,17 @@ async def test_save_memories_batch_semantic_merge_retries_transaction(
                 return existing_id
 
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
 
-        async def fetchrow(
-            self,
-            query,
-            *args,
-        ):
+        async def fetchrow(self, query, *args):
             if "embedding <=>" in query:
                 return {
                     "id": existing_id,
-                    "similarity": 0.95,
+                    "similarity": 0.95
                 }
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
 
     class RetryAcquire:
@@ -704,17 +585,11 @@ async def test_save_memories_batch_semantic_merge_retries_transaction(
         async def __aenter__(self):
             return RetryConnection()
 
-        async def __aexit__(
-            self,
-            exc_type,
-            exc,
-            traceback,
-        ):
+        async def __aexit__(self, exc_type, exc, traceback):
             return False
 
 
     class RetryPool:
-
         def acquire(self):
             return RetryAcquire()
 
@@ -722,31 +597,25 @@ async def test_save_memories_batch_semantic_merge_retries_transaction(
     monkeypatch.setattr(
         database,
         "pool",
-        RetryPool(),
+        RetryPool()
     )
 
 
     repository = MemoryRepository()
 
 
-    result = await repository.save_memories_batch(
-        [
-            {
-                "company_id": "company-1",
-                "memory_type": "semantic",
-                "content": "Repeated campaign insight",
-                "content_hash": "semantic-hash",
-                "metadata": {},
-                "importance": 0.8,
-                "embedding": create_test_embedding(),
-            }
-        ]
-    )
+    result = await repository.save_memories_batch([{
+        "company_id": "company-1",
+        "memory_type": "semantic",
+        "content": "Repeated campaign insight",
+        "content_hash": "semantic-hash",
+        "metadata": {},
+        "importance": 0.8,
+        "embedding": create_test_embedding()
+    }])
 
 
-    assert result == [
-        existing_id
-    ]
+    assert result == [existing_id]
 
     assert attempts == 2
 
@@ -765,16 +634,11 @@ async def test_save_memories_batch_inserts_when_similarity_is_below_threshold(
 
 
     class LowSimilarityConnection:
-
         def transaction(self):
             return MockSaveTransaction()
 
 
-        async def fetchval(
-            self,
-            query,
-            *args,
-        ):
+        async def fetchval(self, query, *args):
 
             # No exact hash match
             if "content_hash = $2" in query:
@@ -786,46 +650,31 @@ async def test_save_memories_batch_inserts_when_similarity_is_below_threshold(
                 return inserted_id
 
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
 
-        async def fetchrow(
-            self,
-            query,
-            *args,
-        ):
+        async def fetchrow(self, query, *args):
             # Similarity lookup returns weak match
             if "embedding <=>" in query:
                 return {
                     "id": uuid4(),
-                    "similarity": 0.70,
+                    "similarity": 0.70
                 }
 
 
-            raise AssertionError(
-                f"Unexpected query: {query}"
-            )
+            raise AssertionError(f"Unexpected query: {query}")
 
 
     class LowSimilarityAcquire:
-
         async def __aenter__(self):
             return LowSimilarityConnection()
 
 
-        async def __aexit__(
-            self,
-            exc_type,
-            exc,
-            traceback,
-        ):
+        async def __aexit__(self, exc_type, exc, traceback):
             return False
 
 
     class LowSimilarityPool:
-
         def acquire(self):
             return LowSimilarityAcquire()
 
@@ -833,31 +682,25 @@ async def test_save_memories_batch_inserts_when_similarity_is_below_threshold(
     monkeypatch.setattr(
         database,
         "pool",
-        LowSimilarityPool(),
+        LowSimilarityPool()
     )
 
 
     repository = MemoryRepository()
 
 
-    result = await repository.save_memories_batch(
-        [
-            {
-                "company_id": "company-1",
-                "memory_type": "semantic",
-                "content": "Completely different memory",
-                "content_hash": "different-hash",
-                "metadata": {},
-                "importance": 0.5,
-                "embedding": create_test_embedding(),
-            }
-        ]
-    )
+    result = await repository.save_memories_batch([{
+        "company_id": "company-1",
+        "memory_type": "semantic",
+        "content": "Completely different memory",
+        "content_hash": "different-hash",
+        "metadata": {},
+        "importance": 0.5,
+        "embedding": create_test_embedding(),
+    }])
 
 
-    assert result == [
-        inserted_id
-    ]
+    assert result == [inserted_id]
 
 
 async def find_similar_memory(
@@ -865,7 +708,7 @@ async def find_similar_memory(
     *,
     company_id,
     embedding,
-    threshold: float,
+    threshold: float
 ):
     """
     Find an existing memory with similar meaning
@@ -913,14 +756,10 @@ class FakeSearchEmbeddingService:
     """
     Fake embedding service that records incoming requests.
     """
-
     def __init__(self):
         self.calls = []
 
-    async def generate_embedding(
-        self,
-        text,
-    ):
+    async def generate_embedding(self, text):
         self.calls.append(text)
         return create_test_embedding()
 
@@ -938,11 +777,7 @@ class MockSearchConnection:
         self.query = None
         self.args = None
 
-    async def fetch(
-        self,
-        query,
-        *args,
-    ):
+    async def fetch(self, query, *args):
         self.query = query
         self.args = args
 
@@ -960,12 +795,7 @@ class MockSearchAcquire:
     async def __aenter__(self):
         return self.connection
 
-    async def __aexit__(
-        self,
-        exc_type,
-        exc,
-        traceback,
-    ):
+    async def __aexit__(self, exc_type, exc, traceback):
         return False
 
 
@@ -1005,29 +835,27 @@ async def test_search_uses_vector_candidates_and_hybrid_ranking(
         7,
         12,
         0,
-        tzinfo=timezone.utc,
+        tzinfo=timezone.utc
     )
 
     connection = MockSearchConnection(
-        rows=[
-            {
-                "id": memory_id,
-                "company_id": company_id,
-                "content": (
-                    "Posts about engineering workflows "
-                    "generated more engagement than "
-                    "AI automation posts."
-                ),
-                "memory_type": "reflection",
-                "metadata": {
-                    "channel": "linkedin",
-                    "source": "analytics-agent",
-                },
-                "importance": 0.9,
-                "similarity": 0.95,
-                "created_at": created_at,
-            }
-        ]
+        rows=[{
+            "id": memory_id,
+            "company_id": company_id,
+            "content": (
+                "Posts about engineering workflows "
+                "generated more engagement than "
+                "AI automation posts."
+            ),
+            "memory_type": "reflection",
+            "metadata": {
+                "channel": "linkedin",
+                "source": "analytics-agent",
+            },
+            "importance": 0.9,
+            "similarity": 0.95,
+            "created_at": created_at
+        }]
     )
 
     monkeypatch.setattr(
@@ -1039,16 +867,14 @@ async def test_search_uses_vector_candidates_and_hybrid_ranking(
     embedding_service = FakeSearchEmbeddingService()
 
     repository = MemoryRepository(
-        embedding_service=embedding_service
+        embedding_service = embedding_service
     )
 
     results = await repository.search(
-        company_id=company_id,
-        query="What messaging worked best in our previous campaign?",
-        k=5,
-        types=[
-            "reflection",
-        ],
+        company_id = company_id,
+        query = "What messaging worked best in our previous campaign?",
+        k = 5,
+        types = ["reflection"]
     )
 
     assert len(results) == 1
@@ -1073,17 +899,11 @@ async def test_search_uses_vector_candidates_and_hybrid_ranking(
     assert "WHERE company_id = $1" in connection.query
     assert "embedding <=> $2::VECTOR(1024)" in connection.query
 
-    candidate_query_end = connection.query.index(
-        "FROM candidates"
-    )
+    candidate_query_end = connection.query.index("FROM candidates")
 
-    type_filter_position = connection.query.rindex(
-        "$4::STRING[] IS NULL"
-    )
+    type_filter_position = connection.query.rindex("$4::STRING[] IS NULL")
 
-    since_filter_position = connection.query.rindex(
-        "$5::TIMESTAMPTZ IS NULL"
-    )
+    since_filter_position = connection.query.rindex("$5::TIMESTAMPTZ IS NULL")
 
     assert type_filter_position > candidate_query_end
     assert since_filter_position > candidate_query_end
@@ -1094,9 +914,7 @@ async def test_search_uses_vector_candidates_and_hybrid_ranking(
     assert connection.args[0] == company_id
     assert connection.args[2] == 50
 
-    assert connection.args[3] == [
-        "reflection",
-    ]
+    assert connection.args[3] == ["reflection"]
 
     assert connection.args[4] is None
     assert connection.args[5] == 5
@@ -1108,106 +926,59 @@ async def test_search_uses_vector_candidates_and_hybrid_ranking(
 
 
 class MockTransaction:
-    def __init__(
-        self,
-        events,
-    ):
+    def __init__(self, events):
         self.events = events
 
-    async def __aenter__(
-        self,
-    ):
+    async def __aenter__(self):
         self.events.append("transaction_enter")
         return self
 
-    async def __aexit__(
-        self,
-        exc_type,
-        exc,
-        traceback,
-    ):
+    async def __aexit__(self, exc_type, exc, traceback):
         self.events.append("transaction_exit")
         return False
 
 
 class MockTransactionalAcquire:
-    def __init__(
-        self,
-        connection,
-    ):
+    def __init__(self, connection):
         self.connection = connection
 
-    async def __aenter__(
-        self,
-    ):
+    async def __aenter__(self):
         return self.connection
 
-    async def __aexit__(
-        self,
-        exc_type,
-        exc,
-        traceback,
-    ):
+    async def __aexit__(self, exc_type, exc, traceback):
         return False
 
 
 class MockTransactionalPool:
-    def __init__(
-        self,
-        connection,
-    ):
+    def __init__(self, connection):
         self.connection = connection
 
-    def acquire(
-        self,
-    ):
+    def acquire(self):
         return MockTransactionalAcquire(self.connection)
 
 
 class RecordingEmbeddingService:
-    def __init__(
-        self,
-        events,
-    ):
+    def __init__(self, events):
         self.events = events
         self.calls = []
 
-    async def generate_embedding(
-        self,
-        text,
-    ):
+    async def generate_embedding(self, text):
         self.events.append("embedding")
         self.calls.append(text)
         return create_test_embedding()
 
 
 class MockWriteConnection:
-    def __init__(
-        self,
-        *,
-        existing_id,
-        events,
-    ):
+    def __init__(self, *, existing_id, events):
         self.existing_id = existing_id
         self.events = events
         self.queries = []
 
-    def transaction(
-        self,
-    ):
+    def transaction(self):
         return MockTransaction(self.events)
 
-    async def fetchval(
-        self,
-        query,
-        *args,
-    ):
-        self.queries.append(
-            (
-                query,
-                args,
-            )
-        )
+    async def fetchval(self, query, *args):
+        self.queries.append((query, args))
 
         if "INSERT INTO memories" in query:
             return None
@@ -1215,43 +986,37 @@ class MockWriteConnection:
         if "content_hash = $2" in query:
             return self.existing_id
 
-        raise AssertionError(
-            f"Unexpected query: {query}"
-        )
+        raise AssertionError(f"Unexpected query: {query}")
 
 
 @pytest.mark.asyncio
-async def test_write_is_idempotent_and_embeds_before_transaction(
-    monkeypatch,
-):
+async def test_write_is_idempotent_and_embeds_before_transaction(monkeypatch):
     events = []
     existing_id = uuid4()
 
     connection = MockWriteConnection(
         existing_id=existing_id,
-        events=events,
+        events=events
     )
 
     monkeypatch.setattr(
         database,
         "pool",
-        MockTransactionalPool(connection),
+        MockTransactionalPool(connection)
     )
 
     embedding_service = RecordingEmbeddingService(events)
 
-    repository = MemoryRepository(
-        embedding_service=embedding_service
-    )
+    repository = MemoryRepository(embedding_service = embedding_service)
 
     result = await repository.write(
-        company_id=uuid4(),
-        memory_type="reflection",
-        content="Engineering workflow posts performed better.",
-        metadata={
+        company_id = uuid4(),
+        memory_type = "reflection",
+        content = "Engineering workflow posts performed better.",
+        metadata  ={
             "source": "analytics-agent",
         },
-        importance=0.9,
+        importance = 0.9
     )
 
     assert result == existing_id
@@ -1260,9 +1025,7 @@ async def test_write_is_idempotent_and_embeds_before_transaction(
         "Engineering workflow posts performed better."
     ]
 
-    assert events.index("embedding") < events.index(
-        "transaction_enter"
-    )
+    assert events.index("embedding") < events.index("transaction_enter")
 
     insert_query = connection.queries[0][0]
 
@@ -1276,27 +1039,16 @@ async def test_write_is_idempotent_and_embeds_before_transaction(
 
 
 class MockRecentConnection:
-    def __init__(
-        self,
-        *,
-        rows,
-        events,
-    ):
+    def __init__(self, *, rows, events):
         self.rows = rows
         self.events = events
         self.query = None
         self.args = None
 
-    def transaction(
-        self,
-    ):
+    def transaction(self):
         return MockTransaction(self.events)
 
-    async def fetch(
-        self,
-        query,
-        *args,
-    ):
+    async def fetch(self, query, *args):
         self.query = query
         self.args = args
 
@@ -1304,9 +1056,7 @@ class MockRecentConnection:
 
 
 @pytest.mark.asyncio
-async def test_recent_returns_memory_hits_in_time_order(
-    monkeypatch,
-):
+async def test_recent_returns_memory_hits_in_time_order(monkeypatch):
     events = []
     company_id = uuid4()
 
@@ -1319,7 +1069,7 @@ async def test_recent_returns_memory_hits_in_time_order(
         7,
         12,
         0,
-        tzinfo=timezone.utc,
+        tzinfo=timezone.utc
     )
 
     older_time = datetime(
@@ -1328,50 +1078,48 @@ async def test_recent_returns_memory_hits_in_time_order(
         6,
         12,
         0,
-        tzinfo=timezone.utc,
+        tzinfo=timezone.utc
     )
 
     connection = MockRecentConnection(
         events=events,
-        rows=[
-            {
-                "id": newest_id,
-                "company_id": company_id,
-                "content": "Newest reflection",
-                "memory_type": "reflection",
-                "metadata": {},
-                "importance": 0.9,
-                "created_at": newest_time,
-            },
-            {
+        rows=[{
+            "id": newest_id,
+            "company_id": company_id,
+            "content": "Newest reflection",
+            "memory_type": "reflection",
+            "metadata": {},
+            "importance": 0.9,
+            "created_at": newest_time
+        },
+        {
                 "id": older_id,
                 "company_id": company_id,
                 "content": "Older reflection",
                 "memory_type": "reflection",
                 "metadata": {},
                 "importance": 0.7,
-                "created_at": older_time,
-            },
-        ],
+                "created_at": older_time
+        }]
     )
 
     monkeypatch.setattr(
         database,
         "pool",
-        MockTransactionalPool(connection),
+        MockTransactionalPool(connection)
     )
 
     repository = MemoryRepository()
 
     results = await repository.recent(
-        company_id=company_id,
-        memory_type="reflection",
-        limit=2,
+        company_id = company_id,
+        memory_type = "reflection",
+        limit = 2
     )
 
     assert [result.id for result in results] == [
         newest_id,
-        older_id,
+        older_id
     ]
 
     assert all(
@@ -1389,7 +1137,7 @@ async def test_recent_returns_memory_hits_in_time_order(
     assert connection.args == (
         company_id,
         "reflection",
-        2,
+        2
     )
 
 @pytest.mark.asyncio
@@ -1398,28 +1146,20 @@ async def test_merge_memory(monkeypatch):
     memory_id = uuid4()
 
     class MergeConnection:
-
         async def fetchval(self, query, *args):
             assert "UPDATE memories" in query
             return memory_id
 
 
     class MergeAcquire:
-
         async def __aenter__(self):
             return MergeConnection()
 
-        async def __aexit__(
-            self,
-            exc_type,
-            exc,
-            traceback,
-        ):
+        async def __aexit__(self, exc_type, exc, traceback):
             return False
 
 
     class MergePool:
-
         def acquire(self):
             return MergeAcquire()
 
@@ -1427,18 +1167,15 @@ async def test_merge_memory(monkeypatch):
     monkeypatch.setattr(
         database,
         "pool",
-        MergePool(),
+        MergePool()
     )
-
 
     repository = MemoryRepository()
 
     result = await repository.merge_memory(
         memory_id,
-        {
-            "source": "agent"
-        },
-        0.9,
+        {"source": "agent"},
+        0.9
     )
 
     assert result == memory_id
@@ -1456,23 +1193,23 @@ async def test_write_rejects_invalid_embedding_dimension(monkeypatch):
 
     with pytest.raises(ValueError):
         await repository.write(
-            company_id=uuid4(),
-            memory_type="semantic",
-            content="test memory",
+            company_id = uuid4(),
+            memory_type = "semantic",
+            content = "test memory"
         )
 
 
 @pytest.mark.asyncio
 async def test_write_rejects_empty_content():
     repository = MemoryRepository(
-        embedding_service=FakeSearchEmbeddingService()
+        embedding_service = FakeSearchEmbeddingService()
     )
 
     with pytest.raises(ValueError):
         await repository.write(
-            company_id=uuid4(),
-            memory_type="semantic",
-            content="   ",
+            company_id = uuid4(),
+            memory_type = "semantic",
+            content = "   "
         )
 
 
@@ -1480,13 +1217,13 @@ async def test_write_rejects_empty_content():
 async def test_search_rejects_empty_query():
 
     repository = MemoryRepository(
-        embedding_service=FakeSearchEmbeddingService()
+        embedding_service = FakeSearchEmbeddingService()
     )
 
     with pytest.raises(ValueError):
         await repository.search(
-            company_id=uuid4(),
-            query="",
+            company_id = uuid4(),
+            query = ""
         )
 
 
@@ -1499,7 +1236,7 @@ async def test_search_rejects_invalid_k():
 
     with pytest.raises(ValueError):
         await repository.search(
-            company_id=uuid4(),
-            query="hello",
-            k=0,
+            company_id = uuid4(),
+            query = "hello",
+            k = 0
         )
