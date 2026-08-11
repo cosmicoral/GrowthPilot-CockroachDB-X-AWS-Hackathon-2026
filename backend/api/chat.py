@@ -58,6 +58,9 @@ async def chat_stream(
     # 3. Stream the response using Server-Sent Events (SSE)
     async def sse_generator():
         try:
+            memories_data = [m.model_dump(mode="json") for m in memories]
+            yield f"data: {json.dumps({'type': 'memories', 'memories': memories_data})}\n\n"
+
             async for chunk in bedrock.generate_text_stream(
                 prompt=request.message,
                 system_prompt=system_prompt,
