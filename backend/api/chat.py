@@ -80,3 +80,40 @@ async def chat_stream(
         sse_generator(),
         media_type="text/event-stream",
     )
+
+
+class GenerateContentRequest(BaseModel):
+    prompt: str
+
+
+@router.post("/generate-content")
+async def generate_content(
+    request: GenerateContentRequest,
+    company_id: UUID = Depends(get_current_company_id),
+):
+    """
+    Generate tailored GTM content (e.g. social posts) using the ContentAgent.
+    """
+    from backend.agents.content import ContentAgent
+    from backend.agents.context import AgentContext
+
+    bedrock = BedrockClient()
+    embedding_service = BedrockEmbeddingService(bedrock)
+    repo = MemoryRepository(embedding_service=embedding_service)
+
+    context = AgentContext(
+        company_id=company_id,
+        bedrock_client=bedrock,
+        memory_repository=repo
+    )
+
+    agent = ContentAgent(context=context)
+    result = await agent.run(prompt=request.prompt)
+
+    if not result.success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Content generation failed: {result.output}"
+        )
+
+    return {"content": result.output}
