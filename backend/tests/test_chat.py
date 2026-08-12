@@ -40,6 +40,7 @@ def test_chat_stream_success(mock_bedrock_class, mock_repo_class):
     assert response.status_code == status.HTTP_200_OK
     content = response.text
 
+    assert 'data: {"type": "memories", "memories": []}\n\n' in content
     assert 'data: {"type": "token", "text": "Hello"}\n\n' in content
     assert 'data: {"type": "token", "text": " World"}\n\n' in content
     # A clean finish must emit a done terminal event
@@ -75,6 +76,7 @@ def test_chat_stream_error_event(mock_bedrock_class, mock_repo_class):
     assert response.status_code == status.HTTP_200_OK
     content = response.text
 
+    assert 'data: {"type": "memories", "memories": []}\n\n' in content
     # The partial chunk should still have been sent
     assert 'data: {"type": "token", "text": "Starting..."}\n\n' in content
     # An error terminal event should be emitted with the error detail
