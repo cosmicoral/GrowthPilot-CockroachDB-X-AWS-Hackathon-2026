@@ -100,8 +100,9 @@ class AnalyticsReflectionAgent(Agent):
         """
         Retrieve recent episodic memories.
 
-        Recent retrieval is used instead of semantic search because analytics
-        should operate over the complete available performance dataset.
+        Recent retrieval is used instead of semantic search so analytics can
+        inspect up to the most recent ``limit`` performance records (50 by
+        default).
         """
 
         return await self.context.memory_repository.recent(
