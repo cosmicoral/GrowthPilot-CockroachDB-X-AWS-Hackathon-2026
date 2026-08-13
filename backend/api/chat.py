@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.api.deps import get_current_company_id
 from backend.llm.client import BedrockClient
@@ -82,8 +82,17 @@ async def chat_stream(
     )
 
 
+from pydantic import BaseModel, field_validator
+
 class GenerateContentRequest(BaseModel):
     prompt: str
+
+    @field_validator("prompt")
+    @classmethod
+    def prompt_must_not_be_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("prompt must not be empty or whitespace")
+        return v
 
 
 @router.post("/generate-content")

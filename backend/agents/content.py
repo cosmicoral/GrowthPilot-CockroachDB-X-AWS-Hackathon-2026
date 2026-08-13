@@ -29,7 +29,7 @@ class ContentAgent(Agent):
                 company_id=self.context.company_id,
                 query=prompt,
                 k=5,
-                types=["episodic", "semantic", "user", "task"]
+                types=["episodic", "semantic", "user", "task", "reflection"]
             )
             return memories
         except Exception as e:
