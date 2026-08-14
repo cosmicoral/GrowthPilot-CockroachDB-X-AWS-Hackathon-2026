@@ -541,7 +541,66 @@ Coming soon:
 - Memory retrieval demonstration
 - CockroachDB knowledge storage
 
---- 
+---
+
+# 📊 Analytics & Reflection Agent Demo
+
+The Analytics & Reflection Agent closes GrowthPilot's learning loop:
+
+```text
+Simulated campaign performance
+→ deterministic comparison
+→ Bedrock-generated reflection
+→ CockroachDB reflection memory
+→ better context for future content
+```
+
+For the hackathon demo, the agent analyzes seeded LinkedIn content using
+`likes`, `comments`, and `clicks`. It can compare performance by content
+theme, ICP, or messaging angle. The numerical analysis is calculated in
+Python; AWS Bedrock turns those results into a concise reflection and next
+experiment. The reflection is then stored with
+`memory_type = "reflection"` so future agent runs can retrieve it.
+
+> **Demo data:** Campaign performance is simulated. This workflow does not
+> connect to the LinkedIn API or Google Analytics.
+
+## Run the demo
+
+Seed FlowForge AI's previous-week memories:
+
+```bash
+.venv/bin/python scripts/seed_demo_founder.py
+```
+
+Analyze performance by content theme:
+
+```bash
+.venv/bin/python scripts/run_analytics_reflection.py --group-by theme
+```
+
+The other supported comparison dimensions are:
+
+```bash
+.venv/bin/python scripts/run_analytics_reflection.py --group-by icp
+.venv/bin/python scripts/run_analytics_reflection.py --group-by messaging_angle
+```
+
+Run the ticket-specific tests:
+
+```bash
+.venv/bin/pytest \
+  backend/tests/test_analytics_reflection.py \
+  backend/tests/test_demo_founder_seed.py
+```
+
+The generated memory includes provenance metadata such as the analysis
+dimension, winning group, post count, analyzed memory IDs, and aggregated
+engagement metrics.
+This makes the reflection inspectable and reusable by later Content
+Generation runs.
+
+---
 
 # 🗺️ Future Roadmap
 

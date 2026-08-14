@@ -18,7 +18,6 @@ from backend.memory.embedding import BedrockEmbeddingService  # noqa: E402
 from backend.memory.hash import create_content_hash  # noqa: E402
 from backend.memory.repository import MemoryRepository  # noqa: E402
 
-
 COMPANY_ID = UUID("3f2b8c41-6e57-4a92-9d13-7c5e8b24a601")
 COMPANY_NAME = "FlowForge AI"
 COMPANY_WEBSITE = "https://example.com/flowforge-ai"
@@ -36,9 +35,10 @@ DEMO_MEMORIES = [
             "source": "research-agent",
             "founder": "Sarah",
             "stage": "week-1",
+            "simulated": True,
         },
         "importance": 0.8,
-        "age_days": 7
+        "age_days": 7,
     },
     {
         "key": "initial-icp",
@@ -54,9 +54,10 @@ DEMO_MEMORIES = [
             "source": "research-agent",
             "founder": "Sarah",
             "stage": "week-1",
+            "simulated": True,
         },
         "importance": 0.85,
-        "age_days": 7
+        "age_days": 7,
     },
     {
         "key": "competitor-research",
@@ -72,9 +73,10 @@ DEMO_MEMORIES = [
             "source": "research-agent",
             "founder": "Sarah",
             "stage": "week-1",
+            "simulated": True,
         },
         "importance": 0.7,
-        "age_days": 7
+        "age_days": 7,
     },
     {
         "key": "linkedin-ai-automation-post",
@@ -90,6 +92,12 @@ DEMO_MEMORIES = [
             "founder": "Sarah",
             "channel": "linkedin",
             "status": "published",
+            "simulated": True,
+            "content_id": "linkedin-ai-automation-01",
+            "title": "5 engineering tasks your team can automate with AI",
+            "theme": "ai_automation",
+            "icp": "engineering_managers",
+            "messaging_angle": "tactical_list",
             "engagement": {
                 "likes": 18,
                 "comments": 3,
@@ -97,7 +105,7 @@ DEMO_MEMORIES = [
             },
         },
         "importance": 0.75,
-        "age_days": 5
+        "age_days": 6,
     },
     {
         "key": "linkedin-engineering-workflows-post",
@@ -113,6 +121,12 @@ DEMO_MEMORIES = [
             "founder": "Sarah",
             "channel": "linkedin",
             "status": "published",
+            "simulated": True,
+            "content_id": "linkedin-engineering-workflow-01",
+            "title": "5 ways to remove friction from your engineering workflow",
+            "theme": "engineering_workflows",
+            "icp": "engineering_managers",
+            "messaging_angle": "problem_solution",
             "engagement": {
                 "likes": 64,
                 "comments": 14,
@@ -120,7 +134,67 @@ DEMO_MEMORIES = [
             },
         },
         "importance": 0.9,
-        "age_days": 4
+        "age_days": 5,
+    },
+    {
+        "key": "linkedin-ai-code-review-post",
+        "memory_type": "episodic",
+        "content": (
+            "Sarah published a LinkedIn post titled "
+            "\"3 AI automations for faster code review.\" "
+            "The post showed technical leads how AI could summarise pull "
+            "requests, identify review risks, and prepare review notes."
+        ),
+        "metadata": {
+            "source": "content-agent",
+            "founder": "Sarah",
+            "channel": "linkedin",
+            "status": "published",
+            "simulated": True,
+            "content_id": "linkedin-ai-code-review-01",
+            "title": "3 AI automations for faster code review",
+            "theme": "ai_automation",
+            "icp": "technical_leads",
+            "messaging_angle": "problem_solution",
+            "engagement": {
+                "likes": 26,
+                "comments": 5,
+                "clicks": 11,
+            },
+        },
+        "importance": 0.75,
+        "age_days": 4,
+    },
+    {
+        "key": "linkedin-release-handoffs-post",
+        "memory_type": "episodic",
+        "content": (
+            "Sarah published a LinkedIn post titled "
+            "\"4 release handoffs slowing down growing engineering teams.\" "
+            "The post gave technical leads a practical checklist for "
+            "reducing friction between development, review, and release."
+        ),
+        "metadata": {
+            "source": "content-agent",
+            "founder": "Sarah",
+            "channel": "linkedin",
+            "status": "published",
+            "simulated": True,
+            "content_id": "linkedin-release-handoffs-01",
+            "title": (
+                "4 release handoffs slowing down growing engineering teams"
+            ),
+            "theme": "engineering_workflows",
+            "icp": "technical_leads",
+            "messaging_angle": "tactical_list",
+            "engagement": {
+                "likes": 55,
+                "comments": 12,
+                "clicks": 24,
+            },
+        },
+        "importance": 0.88,
+        "age_days": 3,
     },
     {
         "key": "previous-week-reflection",
@@ -137,21 +211,26 @@ DEMO_MEMORIES = [
             "source": "reflection-agent",
             "founder": "Sarah",
             "stage": "previous-week-reflection",
+            "simulated": True,
+            "seed_role": "baseline-reflection",
         },
         "importance": 0.95,
-        "age_days": 3
-    }
+        "age_days": 2,
+    },
 ]
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description = "Seed previous-week demo memories for Sarah's FlowForge AI."
+        description=(
+            "Seed previous-week demo memories for Sarah's FlowForge AI."
+        )
     )
 
     parser.add_argument(
         "--cleanup",
-        action = "store_true",
-        help = "Delete the demo company and all associated memories."
+        action="store_true",
+        help="Delete the demo company and all associated memories.",
     )
 
     return parser.parse_args()
@@ -193,7 +272,7 @@ async def ensure_company() -> None:
             (
                 "AI-powered engineering workflow assistant for "
                 "small and mid-sized SaaS teams."
-            )
+            ),
         )
 
 
@@ -206,7 +285,7 @@ async def cleanup() -> None:
             DELETE FROM companies
             WHERE id = $1
             """,
-            COMPANY_ID
+            COMPANY_ID,
         )
 
     print(f"Cleanup completed: {result}")
@@ -217,9 +296,11 @@ async def seed_memories() -> None:
 
     await ensure_company()
 
-    embedding_service = BedrockEmbeddingService(BedrockClient())
-
-    repository = MemoryRepository(embedding_service = embedding_service)
+    bedrock_client = BedrockClient()
+    embedding_service = BedrockEmbeddingService(bedrock_client)
+    repository = MemoryRepository(
+        embedding_service=embedding_service,
+    )
 
     seed_time = datetime.now(timezone.utc)
 
@@ -230,23 +311,22 @@ async def seed_memories() -> None:
         content = memory["content"]
         content_hash = create_content_hash(content)
 
-        # Avoid generating another embedding when rerunning the script.
         memory_id = await repository.get_by_content_hash(
             COMPANY_ID,
-            content_hash
+            content_hash,
         )
 
         if memory_id is None:
             memory_id = await repository.write(
-                company_id = COMPANY_ID,
-                memory_type = memory["memory_type"],
-                content = content,
-                metadata = {
+                company_id=COMPANY_ID,
+                memory_type=memory["memory_type"],
+                content=content,
+                metadata={
                     **memory["metadata"],
                     "demo_key": memory["key"],
                     "product": "FlowForge AI",
                 },
-                importance = memory["importance"],
+                importance=memory["importance"],
             )
 
             inserted += 1
@@ -256,7 +336,7 @@ async def seed_memories() -> None:
             action = "reused"
 
         created_at = seed_time - timedelta(
-            days = memory["age_days"],
+            days=memory["age_days"],
         )
 
         async with database.pool.acquire() as connection:
@@ -264,12 +344,14 @@ async def seed_memories() -> None:
                 """
                 UPDATE memories
                 SET
-                    metadata = $2,
-                    importance = $3,
-                    created_at = $4
+                    memory_type = $2,
+                    metadata = $3,
+                    importance = $4,
+                    created_at = $5
                 WHERE id = $1
                 """,
                 memory_id,
+                memory["memory_type"],
                 {
                     **memory["metadata"],
                     "demo_key": memory["key"],
