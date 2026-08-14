@@ -154,6 +154,7 @@ def test_agent_name(performance_memories):
         "group_by",
         "expected_best_group",
         "expected_averages",
+        "expected_best_metrics",
     ),
     [
         (
@@ -163,6 +164,7 @@ def test_agent_name(performance_memories):
                 "ai_automation": 35.0,
                 "engineering_workflows": 99.0,
             },
+            (119, 26, 53),
         ),
         (
             "icp",
@@ -171,6 +173,7 @@ def test_agent_name(performance_memories):
                 "engineering_managers": 67.5,
                 "technical_leads": 66.5,
             },
+            (82, 17, 36),
         ),
         (
             "messaging_angle",
@@ -179,6 +182,7 @@ def test_agent_name(performance_memories):
                 "problem_solution": 74.5,
                 "tactical_list": 59.5,
             },
+            (90, 19, 40),
         ),
     ],
 )
@@ -187,8 +191,20 @@ async def test_agent_aggregates_supported_dimensions(
     group_by,
     expected_best_group,
     expected_averages,
+    expected_best_metrics,
 ):
-    agent, _, _ = build_agent(performance_memories)
+    likes, comments, clicks = expected_best_metrics
+    reflection = (
+        "The simulated performance data shows that "
+        f"{expected_best_group} performed best, generating {likes} likes, "
+        f"{comments} comments, and {clicks} clicks. A possible hypothesis "
+        "is that this approach resonated with the audience. The next "
+        "experiment should test another post in this group."
+    )
+    agent, _, _ = build_agent(
+        performance_memories,
+        reflection=reflection,
+    )
 
     result = await agent.run(group_by=group_by)
 
@@ -203,7 +219,11 @@ async def test_agent_aggregates_supported_dimensions(
     assert output.group_by == group_by
     assert output.post_count == 4
     assert output.best_group == expected_best_group
-    assert output.reflection == GENERATED_REFLECTION
+    assert output.analyzed_memory_ids == [
+        memory.id
+        for memory in performance_memories
+    ]
+    assert output.reflection == reflection
     assert output.reflection_memory_id is not None
 
     groups = {
@@ -380,7 +400,43 @@ async def test_persists_reflection_memory(
     assert metadata["group_by"] == "theme"
     assert metadata["best_group"] == "engineering_workflows"
     assert metadata["post_count"] == 4
+    assert metadata["analyzed_memory_ids"] == [
+        str(memory.id)
+        for memory in performance_memories
+    ]
     assert len(metadata["aggregates"]) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "reflection",
+    [
+        (
+            "The simulated performance data shows ai_automation performed "
+            "best with 119 likes, 26 comments, and 53 clicks. Hypothesis: "
+            "the topic resonated. Next, test another practical post."
+        ),
+        (
+            "The simulated performance data shows engineering_workflows "
+            "performed best with 120 likes, 26 comments, and 53 clicks. "
+            "Hypothesis: the topic resonated. Next, test another post."
+        ),
+    ],
+)
+async def test_rejects_ungrounded_reflection_before_persisting(
+    performance_memories,
+    reflection,
+):
+    agent, _, repository = build_agent(
+        performance_memories,
+        reflection=reflection,
+    )
+
+    result = await agent.run(group_by="theme")
+
+    assert result.success is False
+    assert "Bedrock reflection does not" in result.output
+    repository.write.assert_not_awaited()
 
 
 @pytest.mark.asyncio

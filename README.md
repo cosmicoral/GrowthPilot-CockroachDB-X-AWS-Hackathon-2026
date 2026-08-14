@@ -595,7 +595,8 @@ Run the ticket-specific tests:
 ```
 
 The generated memory includes provenance metadata such as the analysis
-dimension, winning group, post count, and aggregated engagement metrics.
+dimension, winning group, post count, analyzed memory IDs, and aggregated
+engagement metrics.
 This makes the reflection inspectable and reusable by later Content
 Generation runs.
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Literal, cast
 from uuid import UUID
 
@@ -81,6 +82,7 @@ class AnalyticsReflectionOutput(BaseModel):
     post_count: int = Field(ge=2)
     groups: list[GroupPerformance]
     best_group: str
+    analyzed_memory_ids: list[UUID] = Field(min_length=2)
     reflection: str
     reflection_memory_id: UUID | None = None
 
@@ -245,6 +247,46 @@ class AnalyticsReflectionAgent(Agent):
             "3. One concrete recommendation for the next content experiment."
         )
 
+    @staticmethod
+    def _validate_reflection(
+        reflection: str,
+        best_group: GroupPerformance,
+    ) -> None:
+        """Ensure the LLM narrative agrees with deterministic results."""
+
+        group_pattern = re.escape(best_group.group_name).replace(
+            "_",
+            r"[\s_-]+",
+        )
+
+        if re.search(group_pattern, reflection, flags=re.IGNORECASE) is None:
+            raise ValueError(
+                "Bedrock reflection does not identify the computed best group"
+            )
+
+        expected_metrics = {
+            "likes": best_group.total_likes,
+            "comments": best_group.total_comments,
+            "clicks": best_group.total_clicks,
+        }
+
+        for metric_name, value in expected_metrics.items():
+            number_pattern = re.escape(f"{value:,}").replace(",", ",?")
+            metric_pattern = (
+                rf"(?:\b{number_pattern}\s+(?:total\s+)?{metric_name}\b|"
+                rf"\b{metric_name}\s*(?::|=)?\s*{number_pattern}\b)"
+            )
+
+            if re.search(
+                metric_pattern,
+                reflection,
+                flags=re.IGNORECASE,
+            ) is None:
+                raise ValueError(
+                    "Bedrock reflection does not match the computed "
+                    f"{metric_name} total"
+                )
+
     async def process(
         self,
         retrieved_memories: list[MemoryHit],
@@ -295,7 +337,8 @@ class AnalyticsReflectionAgent(Agent):
                 group.group_name,
             ),
         )
-        best_group = ranked_groups[0].group_name
+        best_group_performance = ranked_groups[0]
+        best_group = best_group_performance.group_name
 
         prompt = self._build_prompt(
             group_by=normalized_group_by,
@@ -316,11 +359,20 @@ class AnalyticsReflectionAgent(Agent):
         if not reflection:
             raise ValueError("Bedrock returned an empty reflection")
 
+        self._validate_reflection(
+            reflection,
+            best_group_performance,
+        )
+
         return AnalyticsReflectionOutput(
             group_by=normalized_group_by,
             post_count=len(posts),
             groups=groups,
             best_group=best_group,
+            analyzed_memory_ids=[
+                post.memory_id
+                for post in posts
+            ],
             reflection=reflection,
         )
 
@@ -341,6 +393,10 @@ class AnalyticsReflectionAgent(Agent):
                 "group_by": result_data.group_by,
                 "best_group": result_data.best_group,
                 "post_count": result_data.post_count,
+                "analyzed_memory_ids": [
+                    str(memory_id)
+                    for memory_id in result_data.analyzed_memory_ids
+                ],
                 "aggregates": [
                     group.model_dump(mode="json")
                     for group in result_data.groups
