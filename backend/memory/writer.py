@@ -21,7 +21,14 @@ class MemoryWriter:
         self.embedding_service = embedding_service
         self.repository = repository
 
-    async def write(self, company_id, text: str):
+    async def write(
+        self,
+        company_id,
+        text: str,
+        memory_type: str = "semantic",
+        metadata: dict | None = None,
+        importance: float = 0.5,
+    ):
         """
         Convert text into stored memories.
         """
@@ -79,11 +86,11 @@ class MemoryWriter:
         for item, embedding in zip(pending_chunks, embeddings):
             memories.append({
                 "company_id": company_id,
-                "memory_type": "semantic",
+                "memory_type": memory_type,
                 "content": item["content"],
                 "content_hash": item["content_hash"],
-                "metadata": {},
-                "importance": 0.5,
+                "metadata": metadata or {},
+                "importance": importance,
                 "embedding": embedding
             })
 
