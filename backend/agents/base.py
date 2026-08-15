@@ -1,9 +1,12 @@
-from abc import ABC, abstractmethod
-from datetime import datetime, timezone
 import logging
 import time
+from abc import ABC, abstractmethod
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
+
 from backend.agents.context import AgentContext
 
 logger = logging.getLogger(__name__)
@@ -138,26 +141,27 @@ class Agent(ABC):
         Record trace safely without interrupting primary execution flow if DB fails.
         """
         try:
-            if not hasattr(self.context, "trace_repository") or self.context.trace_repository is None:
+            if (
+                not hasattr(self.context, "trace_repository")
+                or self.context.trace_repository is None
+            ):
                 return
 
             company_id = getattr(self.context, "company_id", None)
             if not company_id:
                 return
 
-            input_summary = {
-                "args": [str(a) for a in args],
-                "kwargs": {
-                    k: (v if isinstance(v, (str, int, float, bool, dict, list, type(None))) else str(v))
-                    for k, v in kwargs.items()
-                },
-            }
-
-            output_summary = (
-                output_data
-                if isinstance(output_data, (dict, list, str, int, float, bool, type(None)))
-                else {"data": str(output_data)}
+            # Traces are persisted as JSONB. Encode recursively so UUIDs,
+            # datetimes, Pydantic models, and values nested inside containers
+            # cannot make an otherwise successful agent run lose its trace.
+            input_summary = jsonable_encoder(
+                {
+                    "args": list(args),
+                    "kwargs": kwargs,
+                }
             )
+            output_summary = jsonable_encoder(output_data)
+            memories_summary = jsonable_encoder(memories_retrieved)
 
             await self.context.trace_repository.save_trace(
                 company_id=company_id,
@@ -166,7 +170,7 @@ class Agent(ABC):
                 duration_ms=duration_ms,
                 input=input_summary,
                 output=output_summary,
-                memories_retrieved=memories_retrieved,
+                memories_retrieved=memories_summary,
                 success=success,
                 error=error_msg,
             )

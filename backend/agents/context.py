@@ -1,8 +1,9 @@
 from typing import Optional
 from uuid import UUID
+
+from backend.agents.trace import TraceRepository
 from backend.llm.client import BedrockClient
 from backend.memory.repository import MemoryRepository
-from backend.agents.trace import TraceRepository
 
 
 class AgentContext:

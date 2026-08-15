@@ -7,12 +7,13 @@ Uses asyncpg directly to interface with CockroachDB.
 
 from __future__ import annotations
 
-from datetime import datetime
 import logging
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import asyncpg
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 
 from backend.database.database import database, run_in_txn
@@ -30,7 +31,7 @@ class AgentTraceHit(BaseModel):
     start_time: datetime
     duration_ms: float
     input: Dict[str, Any] = Field(default_factory=dict)
-    output: Dict[str, Any] = Field(default_factory=dict)
+    output: Any = Field(default_factory=dict)
     memories_retrieved: List[Dict[str, Any]] = Field(default_factory=list)
     success: bool
     error: Optional[str] = None
@@ -109,7 +110,7 @@ class TraceRepository:
         start_time: datetime,
         duration_ms: float,
         input: Dict[str, Any] | None = None,
-        output: Dict[str, Any] | None = None,
+        output: Any = None,
         memories_retrieved: List[Dict[str, Any]] | None = None,
         success: bool = True,
         error: str | None = None,
@@ -126,12 +127,14 @@ class TraceRepository:
                     agent_name,
                     start_time,
                     duration_ms,
-                    input or {},
-                    output or {},
-                    memories_retrieved or [],
+                    jsonable_encoder(input or {}),
+                    jsonable_encoder(
+                        output if output is not None else {}
+                    ),
+                    jsonable_encoder(memories_retrieved or []),
                     success,
                     error,
-                    metadata or {},
+                    jsonable_encoder(metadata or {}),
                 )
 
             return await run_in_txn(transaction)
@@ -197,7 +200,11 @@ class TraceRepository:
             start_time=data["start_time"],
             duration_ms=data["duration_ms"],
             input=data.get("input") or {},
-            output=data.get("output") or {},
+            output=(
+                data.get("output")
+                if data.get("output") is not None
+                else {}
+            ),
             memories_retrieved=data.get("memories_retrieved") or [],
             success=data["success"],
             error=data.get("error"),

@@ -2,12 +2,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.agents.base import Agent, AgentContext, AgentResult
-from backend.agents.trace import AgentTraceHit, TraceRepository
+from backend.agents.base import Agent, AgentContext
+from backend.agents.trace import AgentTraceHit
 from backend.api.deps import get_current_company_id
 from backend.api.traces import router as traces_router
 from backend.memory.store import MemoryHit
@@ -45,6 +46,22 @@ class FailingAgent(Agent):
 
     async def process(self, retrieved_memories, *args, **kwargs):
         raise RuntimeError("LLM rate limit exceeded")
+
+
+class JsonValueAgent(Agent):
+    def __init__(self, context, output_id):
+        super().__init__(context)
+        self.output_id = output_id
+
+    @property
+    def name(self) -> str:
+        return "json-value-agent"
+
+    async def process(self, retrieved_memories, *args, **kwargs):
+        return {
+            "saved_memory_ids": [self.output_id],
+            "nested": {"memory_id": self.output_id},
+        }
 
 
 def test_migration_003_exists_and_valid():
@@ -147,6 +164,48 @@ async def test_trace_recording_failure_does_not_break_agent():
     # Main execution succeeds even if tracing repository fails
     assert result.success is True
     assert result.output["status"] == "processed"
+
+
+@pytest.mark.asyncio
+async def test_trace_recursively_serializes_nested_uuids():
+    company_id = uuid4()
+    input_id = uuid4()
+    output_id = uuid4()
+    trace_repository = MagicMock()
+    trace_repository.save_trace = AsyncMock(return_value=uuid4())
+    context = AgentContext(
+        company_id=company_id,
+        bedrock_client=MagicMock(),
+        memory_repository=MagicMock(),
+        trace_repository=trace_repository,
+    )
+
+    result = await JsonValueAgent(context, output_id).run(
+        company_profile={"founder_id": input_id},
+    )
+
+    assert result.success is True
+    trace = trace_repository.save_trace.await_args.kwargs
+    assert trace["input"]["kwargs"]["company_profile"]["founder_id"] == str(
+        input_id
+    )
+    assert trace["output"]["saved_memory_ids"] == [str(output_id)]
+    assert trace["output"]["nested"]["memory_id"] == str(output_id)
+
+
+def test_agent_trace_output_accepts_non_dictionary_json_values():
+    trace = AgentTraceHit(
+        id=uuid4(),
+        company_id=uuid4(),
+        agent_name="content",
+        start_time=datetime.now(timezone.utc),
+        duration_ms=10.0,
+        output=["draft", {"status": "ready"}],
+        success=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    assert trace.output == ["draft", {"status": "ready"}]
 
 
 def test_api_list_agent_traces_endpoint():

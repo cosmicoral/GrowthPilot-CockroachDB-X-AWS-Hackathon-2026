@@ -17,12 +17,11 @@ Responsibilities:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import logging
-from typing import Any, Dict, List, Literal, Optional
-from uuid import UUID
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Literal
 
-from backend.agents.base import Agent, AgentResult
+from backend.agents.base import Agent
 from backend.agents.context import AgentContext
 from backend.memory.chunker import TextChunker
 from backend.memory.embedding import BedrockEmbeddingService
@@ -86,6 +85,7 @@ class MarketResearchAgent(Agent):
         """
         company_profile = kwargs.get("company_profile") or {}
         custom_research_text = kwargs.get("custom_research_text")
+        research_request = kwargs.get("prompt", "")
         trigger_source: TriggerSource = kwargs.get("trigger_source", "manual")
 
         company_name = company_profile.get("name", "Company")
@@ -97,11 +97,18 @@ class MarketResearchAgent(Agent):
         if custom_research_text and custom_research_text.strip():
             raw_research = custom_research_text.strip()
         else:
+            prior_research = "\n".join(
+                str(memory.content)
+                for memory in (retrieved_memories or [])[:5]
+                if getattr(memory, "content", None)
+            )
             raw_research = await self._fetch_llm_research(
                 company_name=company_name,
                 industry=industry,
                 description=description,
                 website=website,
+                research_request=research_request,
+                prior_research=prior_research,
             )
 
         # 2. Structure Stage
@@ -127,20 +134,35 @@ class MarketResearchAgent(Agent):
         industry: str,
         description: str,
         website: str,
+        research_request: str = "",
+        prior_research: str = "",
     ) -> str:
         """
         Use Bedrock LLM to generate comprehensive market research across 3 core categories.
         """
+        request_text = research_request.strip() or (
+            "Produce a broad market intelligence update."
+        )
+        prior_context = prior_research.strip() or "No prior research available."
+
         prompt = (
             f"Conduct comprehensive market research for the following company:\n"
             f"Company Name: {company_name}\n"
             f"Industry: {industry}\n"
             f"Description: {description}\n"
             f"Website: {website}\n\n"
-            f"Provide detailed, actionable market research organized clearly under these three headings:\n"
-            f"1. COMPETITOR LANDSCAPE: Identify key direct and indirect competitors, their market positioning, strengths, weaknesses, and key differentiators.\n"
-            f"2. INDUSTRY TRENDS: Identify major industry trends, market tailwinds, growth opportunities, and technological shifts.\n"
-            f"3. CUSTOMER PAIN POINTS: Identify critical target customer pain points, unmet market needs, pricing friction, and workflow challenges.\n"
+            f"Specific founder request: {request_text}\n\n"
+            "Existing stored research (use it to avoid needless repetition "
+            f"and identify changes):\n{prior_context}\n\n"
+            "Provide detailed, actionable market research organized clearly "
+            "under these three headings:\n"
+            "1. COMPETITOR LANDSCAPE: Identify key direct and indirect "
+            "competitors, positioning, strengths, weaknesses, and "
+            "differentiators.\n"
+            "2. INDUSTRY TRENDS: Identify major trends, market tailwinds, "
+            "growth opportunities, and technological shifts.\n"
+            "3. CUSTOMER PAIN POINTS: Identify target customer pain points, "
+            "unmet needs, pricing friction, and workflow challenges.\n"
         )
         system_prompt = (
             "You are GrowthPilot's Senior Market Intelligence Agent. "
@@ -174,15 +196,7 @@ class MarketResearchAgent(Agent):
             if not section_clean:
                 continue
 
-            lower_text = section_clean.lower()
-            if "competitor" in lower_text:
-                category: ResearchCategory = "competitors"
-            elif "trend" in lower_text or "opportunity" in lower_text or "tailwind" in lower_text:
-                category = "trends"
-            elif "pain point" in lower_text or "unmet need" in lower_text or "friction" in lower_text or "customer" in lower_text:
-                category = "pain_points"
-            else:
-                category = "general"
+            category = self._categorize_section(section_clean)
 
             chunks = self.chunker.chunk_text(section_clean, chunk_size=300)
 
@@ -209,6 +223,39 @@ class MarketResearchAgent(Agent):
                 })
 
         return structured_items
+
+    @staticmethod
+    def _categorize_section(section: str) -> ResearchCategory:
+        """Prefer the section heading and only then use keyword fallback."""
+
+        heading = section.splitlines()[0].strip().lower()
+
+        if heading.startswith(("competitor", "competitive landscape")):
+            return "competitors"
+        if heading.startswith(("industry trend", "market trend", "trend")):
+            return "trends"
+        if heading.startswith(("customer pain", "pain point", "unmet need")):
+            return "pain_points"
+
+        lower_text = section.lower()
+        if "competitor" in lower_text:
+            return "competitors"
+        if any(
+            keyword in lower_text
+            for keyword in ("trend", "opportunity", "tailwind")
+        ):
+            return "trends"
+        if any(
+            keyword in lower_text
+            for keyword in (
+                "pain point",
+                "unmet need",
+                "friction",
+                "customer",
+            )
+        ):
+            return "pain_points"
+        return "general"
 
     async def persist_memories(self, result_data: Any) -> List[Any]:
         """
@@ -255,7 +302,9 @@ class MarketResearchAgent(Agent):
 
         if len(embeddings) != len(pending_items):
             raise ValueError(
-                f"Embedding service returned {len(embeddings)} embeddings for {len(pending_items)} pending items"
+                "Embedding service returned "
+                f"{len(embeddings)} embeddings for "
+                f"{len(pending_items)} pending items"
             )
 
         # Build MemoryInput list

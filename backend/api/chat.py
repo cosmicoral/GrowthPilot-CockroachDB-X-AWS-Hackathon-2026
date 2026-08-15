@@ -11,6 +11,7 @@ from backend.agents.analytics_reflection import (
 )
 from backend.agents.content import ContentAgent
 from backend.agents.context import AgentContext
+from backend.agents.market_research import MarketResearchAgent
 from backend.agents.planner import PlannerAgent, PlannerOutput
 from backend.api.deps import get_current_company_id
 from backend.llm.client import BedrockClient
@@ -56,6 +57,7 @@ async def chat_stream(
     )
 
     agents = {
+        "market_research": MarketResearchAgent(context=context),
         "content": ContentAgent(context=context),
         "analytics-reflection-agent": AnalyticsReflectionAgent(
             context=context,
