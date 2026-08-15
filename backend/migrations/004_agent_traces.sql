@@ -1,4 +1,6 @@
--- 003_agent_traces.sql — agent execution tracing and observability (T20)
+-- 004_agent_traces.sql — agent execution tracing and observability (T20)
+-- Renumbered from 003 to avoid a migration-number collision with
+-- 003_harden_auth.sql (PR #37).
 
 CREATE TABLE IF NOT EXISTS agent_traces (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

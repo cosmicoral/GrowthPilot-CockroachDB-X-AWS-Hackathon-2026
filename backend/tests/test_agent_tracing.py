@@ -13,7 +13,7 @@ from backend.api.deps import get_current_company_id
 from backend.api.traces import router as traces_router
 from backend.memory.store import MemoryHit
 
-MIGRATION_FILE = Path(__file__).parent.parent / "migrations" / "003_agent_traces.sql"
+MIGRATION_FILE = Path(__file__).parent.parent / "migrations" / "004_agent_traces.sql"
 
 
 class SuccessAgent(Agent):
@@ -64,8 +64,8 @@ class JsonValueAgent(Agent):
         }
 
 
-def test_migration_003_exists_and_valid():
-    assert MIGRATION_FILE.exists(), "003_agent_traces.sql missing"
+def test_migration_004_exists_and_valid():
+    assert MIGRATION_FILE.exists(), "004_agent_traces.sql missing"
     sql = MIGRATION_FILE.read_text().lower()
     assert "create table if not exists agent_traces" in sql
     assert "company_id" in sql

@@ -8,11 +8,16 @@ Responsibilities:
    for a founder's company/product using LLM generation or external research text.
 2. Structure: Chunk raw research into memory-sized pieces, categorized by topic,
    with rich metadata (source, category, company_name, industry, trigger_source, timestamp).
-3. Dedup: Deduplicate chunks using content hashing (reusing MemoryWriter/create_content_hash)
+3. Dedup: Deduplicate chunks using content hashing (create_content_hash)
    and DB-level ON CONFLICT / semantic deduplication.
 4. Embed: Generate 1024-d vector embeddings using Bedrock embedding service (batched).
-5. Persist: Write memories via MemoryRepository.save_memories_batch() / MemoryWriter
+5. Persist: Write memories directly via MemoryRepository.save_memories_batch()
    with memory_type = "semantic".
+
+Note: this agent talks to MemoryRepository directly rather than through
+MemoryWriter, since it already knows exactly what memory_type/metadata/
+importance each chunk should get — there's no LLM-driven extraction
+decision to make here, just structured research output ready to persist.
 """
 
 from __future__ import annotations
@@ -26,7 +31,6 @@ from backend.agents.context import AgentContext
 from backend.memory.chunker import TextChunker
 from backend.memory.embedding import BedrockEmbeddingService
 from backend.memory.hash import create_content_hash
-from backend.memory.writer import MemoryWriter
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +48,6 @@ class MarketResearchAgent(Agent):
         super().__init__(context)
         self.chunker = TextChunker()
         self.embedding_service = BedrockEmbeddingService(context.bedrock_client)
-        self.writer = MemoryWriter(
-            chunker=self.chunker,
-            embedding_service=self.embedding_service,
-            repository=context.memory_repository,
-        )
 
     @property
     def name(self) -> str:
