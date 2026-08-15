@@ -5,9 +5,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from backend.api.deps import get_current_company_id
 from backend.agents.context import AgentContext
 from backend.agents.market_research import MarketResearchAgent
+from backend.api.deps import get_current_company_id
 from backend.database.database import database
 from backend.llm.client import BedrockClient
 from backend.memory.embedding import BedrockEmbeddingService
@@ -88,7 +88,11 @@ async def run_market_research(
     return ResearchRunResponse(
         agent_name=result.agent_name,
         success=result.success,
-        output=result.output if isinstance(result.output, dict) else {"details": str(result.output)},
+        output=(
+            result.output
+            if isinstance(result.output, dict)
+            else {"details": str(result.output)}
+        ),
         metadata=result.metadata,
     )
 

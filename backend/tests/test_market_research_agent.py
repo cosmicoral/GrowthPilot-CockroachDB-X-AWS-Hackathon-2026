@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -15,7 +16,6 @@ from backend.memory.store import MemoryHit
 from backend.tests.mocks.bedrock import MockBedrockClient
 from backend.tests.mocks.repository import MockMemoryRepository
 
-
 SAMPLE_COMPANY_PROFILE = {
     "name": "EcoCharge",
     "industry": "CleanTech",
@@ -23,16 +23,21 @@ SAMPLE_COMPANY_PROFILE = {
     "website": "https://ecocharge.example.com",
 }
 
-SAMPLE_LLM_RESEARCH = """
-COMPETITOR LANDSCAPE:
-ChargePoint and EVgo dominate municipal charging networks. Tesla Supercharger leads proprietary networks. EcoCharge differentiates with integrated solar micro-grids and battery buffer storage, reducing grid demand charges by 40%.
-
-INDUSTRY TRENDS:
-EV adoption is accelerating worldwide with EU mandate for zero-emission vehicles by 2035. Grid congestion is forcing operators toward localized energy storage and renewable generation.
-
-CUSTOMER PAIN POINTS:
-EV drivers face long wait times at broken charging ports. Commercial fleet operators suffer expensive demand charges from peak grid draws. High installation costs slow down rural charging station deployments.
-"""
+SAMPLE_LLM_RESEARCH = (
+    "COMPETITOR LANDSCAPE:\n"
+    "ChargePoint and EVgo dominate municipal charging networks. "
+    "Tesla Supercharger leads proprietary networks. EcoCharge differentiates "
+    "with integrated solar micro-grids and battery buffer storage, reducing "
+    "grid demand charges by 40%.\n\n"
+    "INDUSTRY TRENDS:\n"
+    "EV adoption is accelerating worldwide with an EU mandate for "
+    "zero-emission vehicles by 2035. Grid congestion is forcing operators "
+    "toward localized energy storage and renewable generation.\n\n"
+    "CUSTOMER PAIN POINTS:\n"
+    "EV drivers face long wait times at broken charging ports. Commercial "
+    "fleet operators suffer expensive demand charges from peak grid draws. "
+    "High installation costs slow rural charging station deployments."
+)
 
 
 def create_test_agent():
@@ -119,6 +124,22 @@ async def test_structure_stage_chunking_and_categorization():
         assert chunk["importance"] == 0.7
 
 
+def test_structure_stage_preserves_explicit_section_heading():
+    agent, _, _, _ = create_test_agent()
+    chunks = agent._structure_research(
+        raw_research=(
+            "COMPETITOR LANDSCAPE:\n"
+            "Competitors discuss customer pain points in their messaging."
+        ),
+        company_name="EcoCharge",
+        industry="CleanTech",
+        trigger_source="manual",
+    )
+
+    assert chunks
+    assert {chunk["category"] for chunk in chunks} == {"competitors"}
+
+
 @pytest.mark.asyncio
 async def test_dedup_stage_content_hash():
     agent, context, mock_bedrock, mock_repo = create_test_agent()
@@ -145,6 +166,28 @@ async def test_dedup_stage_content_hash():
     assert output["memories_deduplicated"] == 1
     assert output["memories_created"] == 0
     assert existing_id in output["saved_memory_ids"]
+
+
+@pytest.mark.asyncio
+async def test_running_same_research_twice_is_idempotent():
+    agent, _, _, _ = create_test_agent()
+
+    first = await agent.run(
+        company_profile=SAMPLE_COMPANY_PROFILE,
+        custom_research_text=SAMPLE_LLM_RESEARCH,
+        trigger_source="manual",
+    )
+    second = await agent.run(
+        company_profile=SAMPLE_COMPANY_PROFILE,
+        custom_research_text=SAMPLE_LLM_RESEARCH,
+        trigger_source="manual",
+    )
+
+    assert first.success is True
+    assert first.output["memories_created"] > 0
+    assert second.success is True
+    assert second.output["memories_created"] == 0
+    assert second.output["memories_deduplicated"] > 0
 
 
 @pytest.mark.asyncio
@@ -186,6 +229,36 @@ async def test_retrieve_prior_memories():
     prior = await agent.retrieve_memories()
     assert len(prior) == 1
     assert prior[0].content == "Prior competitor analysis"
+
+
+@pytest.mark.asyncio
+async def test_prior_research_is_used_for_llm_refresh():
+    agent, context, mock_bedrock, mock_repo = create_test_agent()
+    prior_content = "Prior finding: regional installers are gaining share."
+    mock_repo.recent = AsyncMock(
+        return_value=[
+            MemoryHit(
+                id=uuid4(),
+                company_id=context.company_id,
+                content=prior_content,
+                memory_type="semantic",
+                metadata={"source": "market_research"},
+                importance=0.7,
+                created_at=datetime.now(timezone.utc),
+            )
+        ]
+    )
+
+    result = await agent.run(
+        company_profile=SAMPLE_COMPANY_PROFILE,
+        prompt="Find newly emerging competitors",
+        trigger_source="periodic",
+    )
+
+    assert result.success is True
+    prompt = mock_bedrock.generate_text.await_args.kwargs["prompt"]
+    assert "Find newly emerging competitors" in prompt
+    assert prior_content in prompt
 
 
 def test_api_run_market_research_endpoint():

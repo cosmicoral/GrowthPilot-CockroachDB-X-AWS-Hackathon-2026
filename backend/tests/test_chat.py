@@ -77,6 +77,12 @@ def test_chat_stream_success(
     assert '"type": "done"' in content
     assert '"partial": false' in content
     mock_planner.run.assert_awaited_once_with(message="Hi")
+    registered_agents = mock_planner_class.call_args.kwargs["agents"]
+    assert set(registered_agents) == {
+        "market_research",
+        "content",
+        "analytics-reflection-agent",
+    }
 
 
 @patch("backend.api.chat.PlannerAgent")
