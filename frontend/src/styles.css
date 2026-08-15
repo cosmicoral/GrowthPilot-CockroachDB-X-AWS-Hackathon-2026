@@ -1,0 +1,519 @@
+:root {
+  color: #10233f;
+  background: #6f879b;
+  font-family:
+    "Libre Baskerville",
+    Georgia,
+    "Times New Roman",
+    serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.auth-page {
+  position: relative;
+  display: grid;
+  min-height: 100vh;
+  min-height: 100svh;
+  place-items: center;
+  overflow: hidden;
+  padding: 28px;
+  isolation: isolate;
+
+  background-color: #8195a6;
+  background-image:
+    linear-gradient(
+      180deg,
+      rgba(27, 57, 91, 0.44) 0%,
+      rgba(117, 139, 151, 0.2) 43%,
+      rgba(19, 37, 58, 0.36) 100%
+    ),
+    url("/clouds-bg.jpg");
+
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.auth-page::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  background:
+    radial-gradient(
+      circle at 50% 35%,
+      rgba(255, 255, 255, 0.12),
+      transparent 42%
+    ),
+    rgba(13, 36, 65, 0.08);
+}
+
+.auth-card {
+  width: min(660px, calc(100vw - 40px));
+  padding: 68px 66px 72px;
+
+  color: #0f2039;
+  border: 2px solid rgba(255, 255, 255, 0.78);
+  border-radius: 34px;
+
+  background: rgba(235, 240, 241, 0.72);
+
+  box-shadow:
+    0 30px 80px rgba(9, 24, 42, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+
+  backdrop-filter: blur(20px) saturate(82%);
+  -webkit-backdrop-filter: blur(20px) saturate(82%);
+}
+
+.signup-card {
+  padding-top: 48px;
+  padding-bottom: 50px;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  font-family:
+    "Grenze Gotisch",
+    Georgia,
+    serif;
+
+  font-size: 51px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.brand-symbol {
+  display: grid;
+  width: 47px;
+  height: 47px;
+  place-items: center;
+
+  color: #7fc0f1;
+  border: 2px solid rgba(117, 190, 241, 0.65);
+  border-radius: 50%;
+
+  font-family: Georgia, serif;
+  font-size: 22px;
+  line-height: 1;
+  transform: rotate(-12deg);
+}
+
+.auth-header {
+  margin-top: 72px;
+}
+
+.signup-card .auth-header {
+  margin-top: 42px;
+}
+
+.auth-header h1 {
+  margin: 0;
+
+  font-family:
+    "Grenze Gotisch",
+    Georgia,
+    serif;
+
+  font-size: 47px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+}
+
+.auth-header p {
+  margin: 16px 0 0;
+  color: #31568a;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.form-divider {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+
+  margin: 38px 0 43px;
+
+  color: #4774ae;
+  font-family:
+    "Grenze Gotisch",
+    Georgia,
+    serif;
+
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.form-divider::before,
+.form-divider::after {
+  height: 1px;
+  content: "";
+  flex: 1;
+  background: rgba(66, 100, 142, 0.22);
+}
+
+form {
+  display: grid;
+  gap: 27px;
+}
+
+label {
+  display: grid;
+  gap: 13px;
+
+  color: #0f2039;
+
+  font-family:
+    "Grenze Gotisch",
+    Georgia,
+    serif;
+
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+input {
+  width: 100%;
+  height: 71px;
+  padding: 0 22px;
+
+  color: #172842;
+  border: 2px dashed rgba(79, 124, 180, 0.42);
+  border-radius: 10px;
+  outline: none;
+
+  background: rgba(250, 252, 253, 0.88);
+
+  font-family:
+    "Libre Baskerville",
+    Georgia,
+    serif;
+
+  font-size: 15px;
+
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
+}
+
+input::placeholder {
+  color: #7b8998;
+}
+
+input:focus {
+  border-color: rgba(38, 93, 160, 0.85);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 0 0 4px rgba(59, 110, 174, 0.12);
+}
+
+.submit-button {
+  width: 100%;
+  height: 82px;
+  margin-top: 7px;
+
+  cursor: pointer;
+
+  color: #fff;
+  border: 1px solid #152b49;
+  border-radius: 10px;
+
+  background: #1d3c66;
+
+  font-family:
+    "Grenze Gotisch",
+    Georgia,
+    serif;
+
+  font-size: 27px;
+  font-weight: 500;
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 8px 18px rgba(19, 43, 73, 0.16);
+
+  transition:
+    transform 150ms ease,
+    background-color 150ms ease;
+}
+
+.submit-button:hover:not(:disabled) {
+  background: #163456;
+  transform: translateY(-1px);
+}
+
+.submit-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submit-button:disabled {
+  cursor: wait;
+  opacity: 0.64;
+}
+
+.auth-switch {
+  display: grid;
+  min-height: 74px;
+  margin-top: 27px;
+  place-items: center;
+
+  color: #315d92;
+  border: 1px solid rgba(75, 117, 168, 0.25);
+  border-radius: 10px;
+
+  background: rgba(210, 219, 228, 0.34);
+
+  font-family:
+    "Grenze Gotisch",
+    Georgia,
+    serif;
+
+  font-size: 21px;
+  text-align: center;
+  text-decoration: none;
+
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.auth-switch:hover {
+  border-color: rgba(52, 96, 151, 0.42);
+  background: rgba(210, 219, 228, 0.54);
+}
+
+.form-error {
+  padding: 14px 16px;
+
+  color: #762b37;
+  border: 1px solid rgba(151, 54, 69, 0.32);
+  border-radius: 9px;
+
+  background: rgba(255, 230, 233, 0.72);
+
+  font-family:
+    "Libre Baskerville",
+    Georgia,
+    serif;
+
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.help-button {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+
+  display: grid;
+  width: 50px;
+  height: 50px;
+  place-items: center;
+
+  cursor: pointer;
+
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+
+  background: rgba(13, 19, 28, 0.82);
+
+  font-family:
+    "Libre Baskerville",
+    Georgia,
+    serif;
+
+  font-size: 27px;
+
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.session-card {
+  min-height: 610px;
+}
+
+.session-header {
+  margin-top: 64px;
+}
+
+.session-kicker {
+  margin-bottom: 12px !important;
+  color: #4774ae !important;
+  font-family: "Grenze Gotisch", Georgia, serif;
+  font-size: 14px !important;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+}
+
+.session-profile {
+  display: grid;
+  gap: 9px;
+  margin: 42px 0 28px;
+  padding: 22px 24px;
+  border: 1px solid rgba(75, 117, 168, 0.25);
+  border-radius: 10px;
+  background: rgba(250, 252, 253, 0.56);
+}
+
+.session-profile span {
+  color: #55759a;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.session-profile strong {
+  overflow-wrap: anywhere;
+  color: #172842;
+  font-size: 16px;
+}
+
+@media (max-height: 880px) and (min-width: 721px) {
+  .auth-card {
+    padding-top: 42px;
+    padding-bottom: 44px;
+  }
+
+  .brand-logo {
+    font-size: 43px;
+  }
+
+  .auth-header {
+    margin-top: 42px;
+  }
+
+  .form-divider {
+    margin: 27px 0 30px;
+  }
+
+  form {
+    gap: 20px;
+  }
+
+  input {
+    height: 59px;
+  }
+
+  .submit-button {
+    height: 66px;
+  }
+
+  .auth-switch {
+    min-height: 60px;
+    margin-top: 20px;
+  }
+}
+
+@media (max-width: 720px) {
+  .auth-page {
+    align-items: center;
+    padding: 18px;
+    background-position: 56% center;
+  }
+
+  .auth-card,
+  .signup-card {
+    width: 100%;
+    padding: 34px 25px 36px;
+    border-radius: 25px;
+  }
+
+  .session-card {
+    min-height: 520px;
+  }
+
+  .brand-logo {
+    gap: 11px;
+    font-size: 38px;
+  }
+
+  .brand-symbol {
+    width: 38px;
+    height: 38px;
+    font-size: 17px;
+  }
+
+  .auth-header,
+  .signup-card .auth-header {
+    margin-top: 42px;
+  }
+
+  .auth-header h1 {
+    font-size: 37px;
+  }
+
+  .auth-header p {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .form-divider {
+    margin: 27px 0 30px;
+    font-size: 13px;
+  }
+
+  form {
+    gap: 20px;
+  }
+
+  label {
+    gap: 10px;
+    font-size: 19px;
+  }
+
+  input {
+    height: 56px;
+    padding: 0 16px;
+    font-size: 13px;
+  }
+
+  .submit-button {
+    height: 62px;
+    font-size: 22px;
+  }
+
+  .auth-switch {
+    min-height: 58px;
+    margin-top: 20px;
+    padding: 10px;
+    font-size: 17px;
+  }
+
+  .help-button {
+    right: 12px;
+    bottom: 12px;
+    width: 42px;
+    height: 42px;
+    font-size: 22px;
+  }
+}

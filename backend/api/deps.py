@@ -1,55 +1,50 @@
 from datetime import datetime, timezone
 from uuid import UUID
-from fastapi import Request, HTTPException, status
+
+from fastapi import HTTPException, Request, status
+
+from backend.api.auth import get_presented_session_token, hash_session_token
 from backend.database.database import database
 
 
 async def get_current_company_id(request: Request) -> UUID:
-    """
-    Extract and validate the session token, returning the associated company_id.
-    """
-    token_str = None
-
-    auth_header = request.headers.get("Authorization")
-    if auth_header and auth_header.startswith("Bearer "):
-        token_str = auth_header[7:]
-
-    if not token_str:
-        token_str = request.cookies.get("session_token")
-
-    if not token_str:
+    """Validate the opaque session token and return its company."""
+    token = get_presented_session_token(request)
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication token is missing"
+            detail="Authentication token is missing",
         )
 
-    try:
-        token_uuid = UUID(token_str)
-    except ValueError:
+    # Reject unreasonable values before hashing/querying while avoiding a
+    # format-specific token parser that would reduce future flexibility.
+    if len(token) < 32 or len(token) > 512:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token format"
+            detail="Invalid authentication token",
         )
 
+    token_hash = hash_session_token(token)
     query = """
     SELECT company_id, expires_at
     FROM sessions
-    WHERE token = $1;
+    WHERE token_hash = $1;
     """
 
     async with database.acquire() as conn:
-        row = await conn.fetchrow(query, token_uuid)
+        row = await conn.fetchrow(query, token_hash)
+
+        if row and row["expires_at"] <= datetime.now(timezone.utc):
+            await conn.execute(
+                "DELETE FROM sessions WHERE token_hash = $1;",
+                token_hash,
+            )
+            row = None
 
     if not row:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session not found"
-        )
-
-    if row["expires_at"] < datetime.now(timezone.utc):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session has expired"
+            detail="Session is invalid or has expired",
         )
 
     return row["company_id"]
