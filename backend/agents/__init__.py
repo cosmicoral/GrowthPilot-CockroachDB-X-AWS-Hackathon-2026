@@ -5,6 +5,15 @@ from backend.agents.analytics_reflection import (
     GroupPerformance,
     PerformancePost,
 )
+
+from backend.agents.planner import (
+    ExecutionMode,
+    Intent,
+    PlannerAgent,
+    PlannerDecision,
+    PlannerOutput,
+)
+
 from backend.agents.base import Agent, AgentResult
 from backend.agents.context import AgentContext
 
@@ -17,4 +26,9 @@ __all__ = [
     "EngagementMetrics",
     "GroupPerformance",
     "PerformancePost",
+    "ExecutionMode",
+    "Intent",
+    "PlannerAgent",
+    "PlannerDecision",
+    "PlannerOutput",
 ]
