@@ -16,24 +16,34 @@ class MemoryWriter:
     CockroachDB
     """
 
-    def __init__(self, chunker, embedding_service, repository):
+    def __init__(self, chunker, embedding_service, repository, extraction_policy):
         self.chunker = chunker
         self.embedding_service = embedding_service
         self.repository = repository
+        self.extraction_policy = extraction_policy
 
     async def write(self, company_id, text: str):
         """
         Convert text into stored memories.
         """
 
-        chunks = self.chunker.chunk_text(text)
+        # chunks = self.chunker.chunk_text(text)
+
+        extraction_result = await self.extraction_policy.extract(text)
+
+        if not extraction_result.memories:
+            return []
+
+        memories_to_write = extraction_result.memories
 
         pending_chunks = []
         pending_hashes = set()
 
         saved_memories = []
 
-        for chunk in chunks:
+        for memory in memories_to_write:
+
+            chunk = memory.content
 
             content_hash = create_content_hash(chunk)
 
@@ -54,8 +64,11 @@ class MemoryWriter:
             pending_hashes.add(content_hash)
 
             pending_chunks.append({
-                "content": chunk,
-                "content_hash": content_hash
+                "content": memory.content,
+                "content_hash": content_hash,
+                "memory_type": memory.memory_type,
+                "metadata": memory.metadata,
+                "importance": memory.importance
             })
 
         if not pending_chunks:
@@ -79,11 +92,11 @@ class MemoryWriter:
         for item, embedding in zip(pending_chunks, embeddings):
             memories.append({
                 "company_id": company_id,
-                "memory_type": "semantic",
+                "memory_type": item["memory_type"],
                 "content": item["content"],
                 "content_hash": item["content_hash"],
-                "metadata": {},
-                "importance": 0.5,
+                "metadata": item["metadata"],
+                "importance": item["importance"],
                 "embedding": embedding
             })
 
