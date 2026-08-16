@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
+import re
 from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
+from backend.memory.safety import is_safe_memory
+
+logger = logging.getLogger(__name__)
 
 MemoryType = Literal[
     "episodic",
@@ -97,21 +102,79 @@ class MemoryExtractionPolicy:
     def __init__(self, bedrock_client):
         self.bedrock_client = bedrock_client
 
+    @staticmethod
+    def _parse_response(response: str) -> dict:
+        """Parse JSON directly, from a fenced block, or embedded in prose."""
+
+        response = response.strip()
+
+        # 1. Normal JSON response.
+        try:
+            data = json.loads(response)
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            pass
+
+        # 2. JSON wrapped in a Markdown code fence.
+        fenced_match = re.search(
+            r"```(?:json)?\s*(\{.*?\})\s*```",
+            response,
+            flags=re.DOTALL | re.IGNORECASE,
+        )
+
+        if fenced_match:
+            try:
+                data = json.loads(fenced_match.group(1))
+                if isinstance(data, dict):
+                    return data
+            except json.JSONDecodeError:
+                pass
+
+        # 3. JSON embedded in surrounding prose.
+        start = response.find("{")
+        end = response.rfind("}")
+
+        if start != -1 and end > start:
+            try:
+                data = json.loads(response[start:end + 1])
+                if isinstance(data, dict):
+                    return data
+            except json.JSONDecodeError:
+                pass
+
+        raise ValueError("Memory extraction returned invalid JSON")
+
     async def extract(self, text: str) -> MemoryExtractionResult:
         if not text.strip():
             return MemoryExtractionResult()
 
         response = await self.bedrock_client.generate_text(
-            prompt = text,
-            system_prompt = SYSTEM_PROMPT,
-            max_tokens = 1000,
-            temperature = 0.0,
+            prompt=text,
+            system_prompt=SYSTEM_PROMPT,
+            max_tokens=1000,
+            temperature=0.0,
         )
 
         try:
-            data = json.loads(response)
-            return MemoryExtractionResult.model_validate(data)
-        except (json.JSONDecodeError, ValidationError) as exc:
-            raise ValueError(
-                "Memory extraction returned invalid structured output"
-            ) from exc
+            data = self._parse_response(response)
+            result = MemoryExtractionResult.model_validate(data)
+
+        except (ValueError, ValidationError) as exc:
+            logger.warning(
+                "Memory extraction returned invalid output; "
+                "skipping memory persistence: %s",
+                exc,
+            )
+            return MemoryExtractionResult()
+
+        safe_memories = [
+            memory
+            for memory in result.memories
+            if is_safe_memory(
+                memory.content,
+                memory.metadata,
+            )
+        ]
+
+        return MemoryExtractionResult(memories=safe_memories)
