@@ -18,7 +18,9 @@ class AuthSettings(BaseSettings):
     )
 
     session_ttl_seconds: int = Field(default=7 * 24 * 60 * 60, gt=0)
-    session_cookie_secure: bool = False
+    # Fail safe when deployment configuration is missing. Local HTTP
+    # development opts out explicitly in .env with false.
+    session_cookie_secure: bool = True
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
     frontend_origins: str = "http://localhost:5173"
 

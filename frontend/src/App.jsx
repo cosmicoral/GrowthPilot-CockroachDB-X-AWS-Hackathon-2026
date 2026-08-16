@@ -30,6 +30,25 @@ function goToChat() {
   window.location.replace(chatDestination());
 }
 
+function usesLocalChatRoute() {
+  const configuredDestination = import.meta.env.VITE_CHAT_URL?.trim();
+  return !configuredDestination || configuredDestination === "/chat";
+}
+
+function maskEmail(email) {
+  if (typeof email !== "string") {
+    return "***";
+  }
+
+  const [localPart, domain] = email.split("@");
+  if (!localPart || !domain) {
+    return "***";
+  }
+
+  const visibleEnd = localPart.length > 1 ? localPart.at(-1) : "";
+  return `${localPart[0]}***${visibleEnd}@${domain}`;
+}
+
 function BrandLogo() {
   return (
     <div className="brand-logo" aria-label="GrowthPilot">
@@ -64,6 +83,14 @@ function AuthPage({ mode }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
+    // Auto-forwarding is safe only for our local /chat route because it uses
+    // the same session check below. An independently deployed chat can apply
+    // different checks and redirect back here, so auto-forwarding to an
+    // external VITE_CHAT_URL could otherwise create a redirect loop.
+    if (!usesLocalChatRoute()) {
+      return undefined;
+    }
+
     let isActive = true;
 
     getCurrentCompany()
@@ -283,7 +310,9 @@ function SessionPage() {
         {company && (
           <div className="session-profile">
             <span>Signed in as</span>
-            <strong>{company.email}</strong>
+            <strong title="Email address hidden for privacy">
+              {maskEmail(company.email)}
+            </strong>
           </div>
         )}
 

@@ -20,6 +20,7 @@ from backend.api.auth import (
     router as auth_router,
 )
 from backend.api.deps import get_current_company_id
+from backend.auth_config import AuthSettings, get_auth_settings
 
 app = FastAPI()
 app.include_router(auth_router)
@@ -34,6 +35,14 @@ async def protected_route(company_id=Depends(get_current_company_id)):
 def client():
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture(autouse=True)
+def clear_auth_settings_cache():
+    """Keep environment changes isolated between authentication tests."""
+    get_auth_settings.cache_clear()
+    yield
+    get_auth_settings.cache_clear()
 
 
 def configure_mock_database(mock_db):
@@ -92,6 +101,13 @@ def test_session_token_is_random_and_only_its_hash_is_stable():
     assert hash_session_token(first) != first
 
 
+def test_session_cookie_is_secure_by_default(monkeypatch):
+    monkeypatch.delenv("SESSION_COOKIE_SECURE", raising=False)
+    settings = AuthSettings(_env_file=None)
+
+    assert settings.session_cookie_secure is True
+
+
 def test_signup_rejects_blank_company_name(client):
     response = client.post(
         "/api/auth/signup",
@@ -132,10 +148,25 @@ def test_dependency_token_valid(mock_db, client):
 def test_dependency_token_expired_is_deleted(mock_db, client):
     session_token = generate_session_token()
     conn = configure_mock_database(mock_db)
-    conn.fetchrow.return_value = {
+    expired_row = {
         "company_id": uuid4(),
         "expires_at": datetime.now(timezone.utc) - timedelta(days=1),
     }
+    events = []
+
+    async def fetch_expired_session(*args):
+        events.append("fetch")
+        return expired_row
+
+    async def delete_expired_session(*args):
+        events.append("delete")
+
+    async def release_connection(*args):
+        events.append("release")
+
+    conn.fetchrow.side_effect = fetch_expired_session
+    conn.execute.side_effect = delete_expired_session
+    mock_db.acquire.return_value.__aexit__.side_effect = release_connection
 
     response = client.get(
         "/test-protected",
@@ -146,6 +177,7 @@ def test_dependency_token_expired_is_deleted(mock_db, client):
     assert "expired" in response.json()["detail"].lower()
     conn.execute.assert_awaited_once()
     assert conn.execute.await_args.args[1] == hash_session_token(session_token)
+    assert events == ["fetch", "delete", "release"]
 
 
 @patch("backend.api.deps.database")
@@ -194,6 +226,32 @@ def test_signup_creates_hashed_session_cookie(mock_db, client, monkeypatch):
     assert "HttpOnly" in set_cookie
     assert "SameSite=lax" in set_cookie
     assert "Secure" not in set_cookie
+
+
+@patch("backend.api.auth._set_session_cookie")
+@patch("backend.api.auth.database")
+def test_signup_does_not_set_cookie_when_transaction_rolls_back(
+    mock_db,
+    mock_set_cookie,
+    client,
+):
+    company_uuid = uuid4()
+    conn = configure_mock_database(mock_db)
+    conn.fetchval.return_value = company_uuid
+    transaction_context = conn.transaction.return_value
+    transaction_context.__aexit__.side_effect = RuntimeError("commit failed")
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        client.post(
+            "/api/auth/signup",
+            json={
+                "name": "Acme Inc",
+                "email": "info@acme.com",
+                "password": "supersecurepassword",
+            },
+        )
+
+    mock_set_cookie.assert_not_called()
 
 
 @patch("backend.api.auth.database")

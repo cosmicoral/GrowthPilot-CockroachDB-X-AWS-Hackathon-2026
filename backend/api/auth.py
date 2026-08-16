@@ -155,11 +155,14 @@ def _set_session_cookie(response: Response, token: str, expires_at: datetime) ->
 
 async def create_session_token(
     company_id: UUID,
-    response: Response,
     *,
     connection: asyncpg.Connection | None = None,
-) -> str:
-    """Create a server-side session and expose only its opaque token cookie."""
+) -> tuple[str, datetime]:
+    """Create a server-side session and return its cookie material.
+
+    Callers must not expose the token until any surrounding transaction has
+    committed successfully.
+    """
     token = generate_session_token()
     expires_at = datetime.now(timezone.utc) + timedelta(
         seconds=get_auth_settings().session_ttl_seconds
@@ -175,8 +178,7 @@ async def create_session_token(
     else:
         await connection.execute(query, hash_session_token(token), company_id, expires_at)
 
-    _set_session_cookie(response, token, expires_at)
-    return token
+    return token, expires_at
 
 
 @router.post(
@@ -206,13 +208,20 @@ async def signup(request: SignupRequest, response: Response) -> SessionResponse:
                     request.industry,
                     request.description,
                 )
-                await create_session_token(company_id, response, connection=conn)
+                session_token, expires_at = await create_session_token(
+                    company_id,
+                    connection=conn,
+                )
     except asyncpg.UniqueViolationError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email is already registered",
         ) from exc
 
+    # Set the browser cookie only after the account/session transaction has
+    # committed. A rollback can therefore never leave a phantom cookie whose
+    # hash does not exist in the database.
+    _set_session_cookie(response, session_token, expires_at)
     return SessionResponse(company_id=company_id)
 
 
@@ -245,8 +254,12 @@ async def login(request: LoginRequest, response: Response) -> SessionResponse:
                     replacement_hash,
                     company_id,
                 )
-            await create_session_token(company_id, response, connection=conn)
+            session_token, expires_at = await create_session_token(
+                company_id,
+                connection=conn,
+            )
 
+    _set_session_cookie(response, session_token, expires_at)
     return SessionResponse(company_id=company_id)
 
 
