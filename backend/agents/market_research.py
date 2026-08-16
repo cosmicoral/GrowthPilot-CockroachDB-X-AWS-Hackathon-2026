@@ -95,6 +95,7 @@ class MarketResearchAgent(Agent):
         # 1. Fetch Stage
         if custom_research_text and custom_research_text.strip():
             raw_research = custom_research_text.strip()
+            content_origin = "user_supplied"
         else:
             prior_research = "\n".join(
                 str(memory.content)
@@ -109,6 +110,7 @@ class MarketResearchAgent(Agent):
                 research_request=research_request,
                 prior_research=prior_research,
             )
+            content_origin = "llm_generated"
 
         # 2. Structure Stage
         structured_chunks = self._structure_research(
@@ -116,6 +118,7 @@ class MarketResearchAgent(Agent):
             company_name=company_name,
             industry=industry,
             trigger_source=trigger_source,
+            content_origin=content_origin,
         )
 
         return {
@@ -180,6 +183,7 @@ class MarketResearchAgent(Agent):
         company_name: str,
         industry: str,
         trigger_source: TriggerSource,
+        content_origin: str = "llm_generated",
     ) -> List[Dict[str, Any]]:
         """
         Structure raw research text into memory-sized chunks with metadata.
@@ -212,6 +216,14 @@ class MarketResearchAgent(Agent):
                     "agent": self.name,
                     "trigger_source": trigger_source,
                     "timestamp": now_iso,
+                    # Research is useful context, but neither LLM output nor
+                    # user-supplied text should silently become verified fact.
+                    "content_origin": content_origin,
+                    "generated_by": (
+                        "bedrock" if content_origin == "llm_generated" else "user_input"
+                    ),
+                    "verified": False,
+                    "confidence": "unverified",
                 }
                 structured_items.append({
                     "content": chunk_str,
@@ -272,7 +284,9 @@ class MarketResearchAgent(Agent):
         pending_hashes = set()
         existing_ids = []
 
-        # 3. Dedup Stage (Content Hash)
+        # 3. Dedup Stage (Content Hash). This pre-check avoids needless
+        # embeddings in the common case. The repository's UNIQUE constraint
+        # and ON CONFLICT path remain the final concurrency-safe guarantee.
         for item in structured_chunks:
             content_hash = item["content_hash"]
 

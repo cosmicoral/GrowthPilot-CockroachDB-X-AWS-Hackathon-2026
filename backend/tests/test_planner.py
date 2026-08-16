@@ -62,6 +62,29 @@ async def test_routes_content_request(dependencies):
 
 
 @pytest.mark.asyncio
+async def test_execution_mode_is_derived_in_code_not_trusted_from_llm(dependencies):
+    context, bedrock, _ = dependencies
+    bedrock.generate_text.return_value = (
+        '{"intents":["content","research"],'
+        '"execution":"parallel",'
+        '"reason":"Model chose an unsafe mode"}'
+    )
+    research = mock_agent("market_research", "Research result")
+    content = mock_agent("content", "Generated post")
+    planner = PlannerAgent(
+        context,
+        agents={"market_research": research, "content": content},
+    )
+
+    result = await planner.run(message="Research competitors and write a post")
+
+    assert result.success is True
+    assert result.output.decision.intents == [Intent.RESEARCH, Intent.CONTENT]
+    assert result.output.decision.execution == ExecutionMode.SEQUENTIAL
+    assert "Research result" in content.run.await_args.kwargs["prompt"]
+
+
+@pytest.mark.asyncio
 async def test_runs_dependent_agents_sequentially(dependencies):
     context, bedrock, _ = dependencies
     bedrock.generate_text.return_value = (
@@ -161,6 +184,66 @@ async def test_returns_partial_output_when_later_agent_fails(dependencies):
 
 
 @pytest.mark.asyncio
+async def test_sequential_plan_preserves_independent_upstream_success(dependencies):
+    context, bedrock, _ = dependencies
+    bedrock.generate_text.return_value = (
+        '{"intents":["research","analytics","content"],'
+        '"reason":"Content depends on available upstream findings"}'
+    )
+    research = mock_agent("market_research", "Research unavailable", success=False)
+    analytics = mock_agent("analytics-reflection-agent", "Analytics result")
+    content = mock_agent("content", "Generated post")
+    planner = PlannerAgent(
+        context,
+        agents={
+            "market_research": research,
+            "analytics-reflection-agent": analytics,
+            "content": content,
+        },
+    )
+
+    result = await planner.run(message="Research, analyze, then write a post")
+
+    assert result.success is True
+    assert result.output.partial is True
+    assert result.output.failed_agents == ["market_research"]
+    analytics.run.assert_awaited_once()
+    content.run.assert_awaited_once()
+    content_prompt = content.run.await_args.kwargs["prompt"]
+    assert "Analytics result" in content_prompt
+    assert "Research unavailable" not in content_prompt
+
+
+@pytest.mark.asyncio
+async def test_parallel_plan_converts_unexpected_exception_to_partial_result(
+    dependencies,
+):
+    context, bedrock, _ = dependencies
+    bedrock.generate_text.return_value = (
+        '{"intents":["research","analytics"],'
+        '"reason":"Independent work"}'
+    )
+    planner = PlannerAgent(context)
+    planner._run_one = AsyncMock(
+        side_effect=[
+            AgentResult(
+                agent_name="market_research",
+                success=True,
+                output="Research result",
+            ),
+            RuntimeError("Unexpected analytics crash"),
+        ]
+    )
+
+    result = await planner.run(message="Research and analyze performance")
+
+    assert result.success is True
+    assert result.output.partial is True
+    assert result.output.failed_agents == ["analytics-reflection-agent"]
+    assert result.output.response == "Research result"
+
+
+@pytest.mark.asyncio
 async def test_returns_failure_when_all_agents_fail(dependencies):
     context, bedrock, _ = dependencies
     bedrock.generate_text.return_value = (
@@ -243,12 +326,54 @@ async def test_missing_agent_is_reported_as_failure(dependencies):
 
 
 @pytest.mark.asyncio
-async def test_invalid_classifier_output_returns_failure(dependencies):
+async def test_invalid_classifier_output_uses_keyword_fallback(dependencies):
     context, bedrock, _ = dependencies
     bedrock.generate_text.return_value = "not valid JSON"
+    research = mock_agent("market_research", "Research result")
+    content = mock_agent("content", "Generated post")
+    planner = PlannerAgent(
+        context,
+        agents={"market_research": research, "content": content},
+    )
+
+    result = await planner.run(message="Research competitors and write a post")
+
+    assert result.success is True
+    assert result.output.decision.intents == [Intent.RESEARCH, Intent.CONTENT]
+    assert result.output.decision.execution == ExecutionMode.SEQUENTIAL
+    assert result.output.decision.reason == "Deterministic keyword fallback"
+
+
+@pytest.mark.asyncio
+async def test_classifier_extracts_json_surrounded_by_model_commentary(dependencies):
+    context, bedrock, _ = dependencies
+    bedrock.generate_text.return_value = (
+        "Here is the classification:\n"
+        '{"intents":["content"],"reason":"User requested a post"}\n'
+        "I hope this helps."
+    )
+    content = mock_agent("content", "Generated post")
+    planner = PlannerAgent(context, agents={"content": content})
+
+    result = await planner.run(message="Write a launch post")
+
+    assert result.success is True
+    assert result.output.decision.intents == [Intent.CONTENT]
+    assert result.output.decision.execution == ExecutionMode.SINGLE
+
+
+@pytest.mark.asyncio
+async def test_classifier_call_failure_uses_general_fallback(dependencies):
+    context, bedrock, repository = dependencies
+    bedrock.generate_text.side_effect = [
+        RuntimeError("Bedrock timeout"),
+        "I do not have enough stored context to answer.",
+    ]
+    repository.search.return_value = []
     planner = PlannerAgent(context)
 
-    result = await planner.run(message="Help me")
+    result = await planner.run(message="Can you help me?")
 
-    assert result.success is False
-    assert "Invalid JSON" in result.output
+    assert result.success is True
+    assert result.output.decision.intents == [Intent.GENERAL]
+    assert result.output.decision.reason == "Deterministic keyword fallback"

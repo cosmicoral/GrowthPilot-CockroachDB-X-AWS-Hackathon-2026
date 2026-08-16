@@ -7,8 +7,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from backend.agents import trace as trace_module
 from backend.agents.base import Agent, AgentContext
-from backend.agents.trace import AgentTraceHit
+from backend.agents.trace import AgentTraceHit, TraceRepository
 from backend.api.deps import get_current_company_id
 from backend.api.traces import router as traces_router
 from backend.memory.store import MemoryHit
@@ -206,6 +207,119 @@ def test_agent_trace_output_accepts_non_dictionary_json_values():
     )
 
     assert trace.output == ["draft", {"status": "ready"}]
+
+
+@pytest.mark.asyncio
+async def test_trace_repository_redacts_and_bounds_payloads(monkeypatch):
+    monkeypatch.setattr(trace_module, "TRACE_MAX_STRING_CHARS", 20)
+    monkeypatch.setattr(trace_module, "TRACE_MAX_PAYLOAD_CHARS", 1_000)
+    monkeypatch.setattr(trace_module, "TRACE_MAX_MEMORIES", 2)
+
+    trace_id = uuid4()
+    captured = {}
+
+    async def run_transaction(operation):
+        connection = AsyncMock()
+        connection.fetchval.return_value = trace_id
+        result = await operation(connection)
+        captured["args"] = connection.fetchval.await_args.args
+        return result
+
+    with patch(
+        "backend.agents.trace.run_in_txn",
+        new=AsyncMock(side_effect=run_transaction),
+    ):
+        result = await TraceRepository().save_trace(
+            company_id=uuid4(),
+            agent_name="content",
+            start_time=datetime.now(timezone.utc),
+            duration_ms=25.0,
+            input={
+                "password": "do-not-store",
+                "nested": {
+                    "authorization": "Bearer secret",
+                    "safe": "x" * 80,
+                    "token_count": 42,
+                },
+            },
+            output={"session_token": "secret", "body": "y" * 80},
+            memories_retrieved=[{"id": index} for index in range(5)],
+            metadata={"api_key": "secret"},
+        )
+
+    assert result == trace_id
+    insert_args = captured["args"]
+    safe_input = insert_args[5]
+    safe_output = insert_args[6]
+    safe_memories = insert_args[7]
+    safe_metadata = insert_args[10]
+
+    assert safe_input["password"] == "[REDACTED]"
+    assert safe_input["nested"]["authorization"] == "[REDACTED]"
+    assert safe_input["nested"]["safe"].endswith("… [truncated]")
+    assert safe_input["nested"]["token_count"] == 42
+    assert safe_output["session_token"] == "[REDACTED]"
+    assert safe_output["body"].endswith("… [truncated]")
+    assert len(safe_memories) == 3
+    assert safe_memories[-1] == {"_truncated_memories": 3}
+    assert safe_metadata["api_key"] == "[REDACTED]"
+    assert safe_metadata["trace_safety"]["redacted"] is True
+    assert set(safe_metadata["trace_safety"]["truncated_fields"]) == {
+        "input",
+        "output",
+        "memories_retrieved",
+    }
+
+
+@pytest.mark.asyncio
+async def test_trace_repository_caps_total_payload_size(monkeypatch):
+    monkeypatch.setattr(trace_module, "TRACE_MAX_STRING_CHARS", 10_000)
+    monkeypatch.setattr(trace_module, "TRACE_MAX_PAYLOAD_CHARS", 1_000)
+
+    captured = {}
+
+    async def run_transaction(operation):
+        connection = AsyncMock()
+        connection.fetchval.return_value = uuid4()
+        result = await operation(connection)
+        captured["args"] = connection.fetchval.await_args.args
+        return result
+
+    with patch(
+        "backend.agents.trace.run_in_txn",
+        new=AsyncMock(side_effect=run_transaction),
+    ):
+        await TraceRepository().save_trace(
+            company_id=uuid4(),
+            agent_name="market_research",
+            start_time=datetime.now(timezone.utc),
+            duration_ms=25.0,
+            output={"items": [{"text": "x" * 500} for _ in range(10)]},
+        )
+
+    safe_output = captured["args"][6]
+    safe_metadata = captured["args"][10]
+    assert safe_output["_truncated"] is True
+    assert safe_output["original_chars"] > 1_000
+    assert "output" in safe_metadata["trace_safety"]["truncated_fields"]
+
+
+@pytest.mark.asyncio
+async def test_trace_repository_logs_non_retryable_persistence_failure(caplog):
+    with patch(
+        "backend.agents.trace.run_in_txn",
+        new=AsyncMock(side_effect=RuntimeError("database unavailable")),
+    ), caplog.at_level("ERROR"):
+        result = await TraceRepository().save_trace(
+            company_id=uuid4(),
+            agent_name="content",
+            start_time=datetime.now(timezone.utc),
+            duration_ms=25.0,
+        )
+
+    assert result is None
+    assert "Failed to persist agent trace" in caplog.text
+    assert "database unavailable" in caplog.text
 
 
 def test_api_list_agent_traces_endpoint():

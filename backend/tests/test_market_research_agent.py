@@ -95,6 +95,10 @@ async def test_fetch_stage_custom_research_override():
     assert result.success is True
     mock_bedrock.generate_text.assert_not_called()
     assert result.output["raw_research"] == custom_text
+    metadata = result.output["structured_chunks"][0]["metadata"]
+    assert metadata["content_origin"] == "user_supplied"
+    assert metadata["generated_by"] == "user_input"
+    assert metadata["verified"] is False
 
 
 @pytest.mark.asyncio
@@ -121,6 +125,10 @@ async def test_structure_stage_chunking_and_categorization():
         assert meta["industry"] == "CleanTech"
         assert meta["agent"] == "market_research"
         assert meta["trigger_source"] == "onboarding"
+        assert meta["content_origin"] == "llm_generated"
+        assert meta["generated_by"] == "bedrock"
+        assert meta["verified"] is False
+        assert meta["confidence"] == "unverified"
         assert chunk["importance"] == 0.7
 
 
