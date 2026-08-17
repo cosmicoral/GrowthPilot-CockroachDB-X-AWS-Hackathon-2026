@@ -18,7 +18,7 @@ Design decisions worth recording (the "why", not just the "what"):
    `_rng_for_founder`), not from wall-clock time. Re-running the script
    regenerates the exact same companies and memory content every time.
    Combined with the dedup path already built into
-   `MemoryRepository.save_memories_batch()` (content_hash + semantic
+   `MemoryRepository._save_or_merge_memory()` (content_hash + semantic
    similarity), reruns are idempotent: no duplicate rows, no duplicate
    Bedrock embedding calls for content that's already stored.
 
@@ -28,9 +28,9 @@ Design decisions worth recording (the "why", not just the "what"):
    needed for T36 or for `--cleanup` to find "our" synthetic companies
    again later.
 
-4. Each founder is written in its own transaction (one
-   `save_memories_batch()` call per founder), not one transaction for the
-   whole cohort. CockroachDB is SERIALIZABLE by default, so a write
+4. Each founder is written atomically in its own transaction: the company
+   upsert, all memory inserts/merges, and timestamp updates either all
+   commit or all roll back. CockroachDB is SERIALIZABLE by default, so a write
    conflict aborts the *whole* transaction and it has to be retried from
    scratch (see `backend/database/database.py::with_retry`). Seventy-five
    founders' worth of inserts in a single transaction would make every
@@ -49,7 +49,9 @@ Usage:
     python scripts/seed_growthgraph_founders.py
     python scripts/seed_growthgraph_founders.py --count 100
     python scripts/seed_growthgraph_founders.py --cleanup
-    python scripts/seed_growthgraph_founders.py --cleanup --count 100
+
+`--cleanup` always removes the entire deterministic T35 UUID range, regardless
+of how many founders were seeded on the most recent run.
 """
 
 from __future__ import annotations
@@ -65,7 +67,7 @@ from uuid import UUID, uuid5
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from backend.database.database import database  # noqa: E402
+from backend.database.database import database, run_in_txn  # noqa: E402
 from backend.llm.client import BedrockClient  # noqa: E402
 from backend.memory.embedding import BedrockEmbeddingService  # noqa: E402
 from backend.memory.hash import create_content_hash  # noqa: E402
@@ -300,7 +302,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Delete the synthetic cohort's companies and memories.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not MIN_FOUNDER_COUNT <= args.count <= MAX_FOUNDER_COUNT:
+        parser.error(
+            f"--count must be between {MIN_FOUNDER_COUNT} and "
+            f"{MAX_FOUNDER_COUNT} (got {args.count})"
+        )
+    return args
 
 
 async def ensure_company(connection, founder: dict) -> None:
@@ -330,19 +338,21 @@ async def seed_founder(
 ) -> dict:
     company_id = founder["company_id"]
 
-    async with database.pool.acquire() as connection:
-        await ensure_company(connection, founder)
-
     # Work out which memories are actually new before paying for
     # embeddings -- reruns should be near-free.
-    to_embed = []
+    prepared_memories = []
+    to_embed: list[str] = []
     for memory in founder["memories"]:
         content_hash = create_content_hash(memory["content"])
         existing_id = await repository.get_by_content_hash(
             company_id, content_hash,
         )
-        memory["content_hash"] = content_hash
-        memory["existing_id"] = existing_id
+        prepared_memory = {
+            **memory,
+            "content_hash": content_hash,
+            "existing_id": existing_id,
+        }
+        prepared_memories.append(prepared_memory)
         if existing_id is None:
             to_embed.append(memory["content"])
 
@@ -351,58 +361,70 @@ async def seed_founder(
         vectors = await embedding_service.generate_embeddings(to_embed)
         embeddings_by_content = dict(zip(to_embed, vectors))
 
-    memory_inputs = []
-    for memory in founder["memories"]:
-        if memory["existing_id"] is not None:
-            continue
-        memory_inputs.append({
-            "company_id": company_id,
-            "memory_type": memory["memory_type"],
-            "content": memory["content"],
-            "content_hash": memory["content_hash"],
-            "metadata": memory["metadata"],
-            "importance": memory["importance"],
-            "embedding": embeddings_by_content[memory["content"]],
-        })
+    async def save_founder(connection) -> dict:
+        """Persist one founder atomically on the transaction connection."""
 
-    inserted_ids = []
-    if memory_inputs:
-        inserted_ids = await repository.save_memories_batch(memory_inputs)
+        await ensure_company(connection, founder)
 
-    # Backdate created_at so recency-decay ranking has something real to
-    # rank against, same approach as T13's seed_demo_founder.py.
-    async with database.pool.acquire() as connection:
-        for memory in founder["memories"]:
+        inserted = 0
+        reused = 0
+        for memory in prepared_memories:
             memory_id = memory["existing_id"]
             if memory_id is None:
-                # Newly inserted -- look it up by hash now that it exists.
-                memory_id = await repository.get_by_content_hash(
-                    company_id, memory["content_hash"],
+                memory_id = await repository._save_or_merge_memory(
+                    connection,
+                    {
+                        "company_id": company_id,
+                        "memory_type": memory["memory_type"],
+                        "content": memory["content"],
+                        "content_hash": memory["content_hash"],
+                        "metadata": memory["metadata"],
+                        "importance": memory["importance"],
+                        "embedding": embeddings_by_content[memory["content"]],
+                    },
                 )
+                inserted += 1
+            else:
+                reused += 1
+
+            if memory_id is None:
+                raise RuntimeError(
+                    f"Memory persistence returned no id for company {company_id}"
+                )
+
+            # Backdate created_at so recency-decay ranking has something real
+            # to rank against, same approach as T13's seed_demo_founder.py.
             created_at = seed_time - timedelta(days=memory["age_days"])
             await connection.execute(
                 """
                 UPDATE memories
-                SET importance = $2, created_at = $3
-                WHERE id = $1
+                SET importance = $3, created_at = $4
+                WHERE company_id = $1 AND id = $2
                 """,
+                company_id,
                 memory_id,
                 memory["importance"],
                 created_at,
             )
 
-    return {
-        "company_id": company_id,
-        "inserted": len(memory_inputs),
-        "reused": len(founder["memories"]) - len(memory_inputs),
-    }
+        return {
+            "company_id": company_id,
+            "inserted": inserted,
+            "reused": reused,
+        }
+
+    # Embeddings are intentionally prepared before entering run_in_txn so a
+    # CockroachDB serialization retry never repeats a paid Bedrock call.
+    return await run_in_txn(save_founder)
 
 
-async def cleanup(count: int) -> None:
-    company_ids = [derive_company_id(i) for i in range(count)]
+async def cleanup() -> None:
+    # Always target every UUID this script is capable of creating. Using the
+    # current/default --count would leave rows behind after a larger seed run.
+    company_ids = [derive_company_id(i) for i in range(MAX_FOUNDER_COUNT)]
 
-    async with database.pool.acquire() as connection:
-        result = await connection.execute(
+    async def delete_cohort(connection):
+        return await connection.execute(
             """
             DELETE FROM companies
             WHERE id = ANY($1::UUID[])
@@ -410,6 +432,7 @@ async def cleanup(count: int) -> None:
             company_ids,
         )
 
+    result = await run_in_txn(delete_cohort)
     print(f"Cleanup completed for {len(company_ids)} companies: {result}")
 
 
@@ -458,18 +481,11 @@ async def seed_cohort(count: int) -> None:
 async def main() -> None:
     args = parse_args()
 
-    if not MIN_FOUNDER_COUNT <= args.count <= MAX_FOUNDER_COUNT:
-        print(
-            f"--count must be between {MIN_FOUNDER_COUNT} and "
-            f"{MAX_FOUNDER_COUNT} (got {args.count})"
-        )
-        return
-
     await database.connect()
 
     try:
         if args.cleanup:
-            await cleanup(args.count)
+            await cleanup()
         else:
             await seed_cohort(args.count)
     finally:
