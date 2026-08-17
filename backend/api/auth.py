@@ -6,7 +6,7 @@ import hmac
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import asyncpg
 from fastapi import APIRouter, HTTPException, Request, Response, status

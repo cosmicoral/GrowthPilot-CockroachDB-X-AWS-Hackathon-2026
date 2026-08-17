@@ -8,6 +8,7 @@ from backend.api.chat import router as chat_router
 from backend.api.company import router as company_router
 from backend.api.health import router as health_router
 from backend.api.memory import router as memory_router
+
 from backend.auth_config import get_auth_settings
 from backend.database.database import database
 

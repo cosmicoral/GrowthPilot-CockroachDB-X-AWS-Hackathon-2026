@@ -4,12 +4,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, field_validator
 
 from backend.api.deps import get_current_company_id
 from backend.llm.client import BedrockClient
+from backend.memory.chunker import TextChunker
 from backend.memory.embedding import BedrockEmbeddingService
+from backend.memory.extraction import MemoryExtractionPolicy
 from backend.memory.repository import MemoryRepository
+from backend.memory.writer import MemoryWriter
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 logger = logging.getLogger(__name__)
@@ -29,7 +32,17 @@ async def chat_stream(
     """
     bedrock = BedrockClient()
     embedding_service = BedrockEmbeddingService(bedrock)
-    repo = MemoryRepository(embedding_service=embedding_service)
+    repo = MemoryRepository(embedding_service = embedding_service)
+
+    extraction_policy = MemoryExtractionPolicy(bedrock)
+    chunker = TextChunker()
+
+    memory_writer = MemoryWriter(
+        chunker = chunker,
+        embedding_service = embedding_service,
+        repository = repo,
+        extraction_policy = extraction_policy,
+    )
 
     # 1. Search for relevant memories based on the user's message
     try:
@@ -61,12 +74,38 @@ async def chat_stream(
             memories_data = [m.model_dump(mode="json") for m in memories]
             yield f"data: {json.dumps({'type': 'memories', 'memories': memories_data})}\n\n"
 
+            response_chunks = []
+
             async for chunk in bedrock.generate_text_stream(
                 prompt=request.message,
                 system_prompt=system_prompt,
             ):
+                response_chunks.append(chunk)
+
                 data = json.dumps({"type": "token", "text": chunk})
                 yield f"data: {data}\n\n"
+
+            response_text = "".join(response_chunks)
+
+            # Memory persistence is auxiliary and must not break the chat response.
+            try:
+                memory_text = (
+                    f"User: {request.message}\n"
+                    f"Assistant: {response_text}"
+                )
+
+                await memory_writer.write(
+                    company_id=company_id,
+                    text=memory_text,
+                )
+
+            except Exception as exc:
+                logger.warning(
+                    "Memory persistence failed for company %s; "
+                    "continuing after successful chat response: %s",
+                    company_id,
+                    exc,
+                )
 
             # Signal a clean finish so the frontend knows the stream ended normally
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
@@ -81,8 +120,6 @@ async def chat_stream(
         media_type="text/event-stream",
     )
 
-
-from pydantic import BaseModel, field_validator
 
 class GenerateContentRequest(BaseModel):
     prompt: str

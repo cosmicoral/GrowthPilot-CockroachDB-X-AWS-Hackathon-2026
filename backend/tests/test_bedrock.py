@@ -1,7 +1,9 @@
 import io
 import json
 from unittest.mock import MagicMock, patch
+
 import pytest
+
 from backend.llm.client import BedrockClient
 
 
