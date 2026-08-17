@@ -347,3 +347,88 @@ async def test_memory_writer_uses_extracted_memory_policy():
     assert saved_memory["metadata"] == {
         "source": "conversation"
     }
+
+async def test_memory_writer_legacy_chunk_path():
+    """Verify the original chunk-based writer interface remains supported."""
+
+    chunker = TextChunker()
+    chunker.chunk_text = lambda text: ["First chunk"]
+
+    embedding_service = AsyncMock()
+    embedding_service.generate_embeddings.return_value = [
+        [0.1] * 1024
+    ]
+
+    repository = AsyncMock()
+    repository.get_by_content_hash.return_value = None
+    repository.save_memories_batch.return_value = [123]
+
+    writer = MemoryWriter(
+        chunker=chunker,
+        embedding_service=embedding_service,
+        repository=repository,
+    )
+
+    company_id = uuid4()
+
+    result = await writer.write(
+        company_id=company_id,
+        text="Some text",
+        memory_type="semantic",
+        metadata={"source": "test"},
+        importance=0.8,
+    )
+
+    assert result == [123]
+
+    repository.save_memories_batch.assert_awaited_once()
+
+    saved_memory = repository.save_memories_batch.call_args.args[0][0]
+
+    assert saved_memory["company_id"] == company_id
+    assert saved_memory["memory_type"] == "semantic"
+    assert saved_memory["content"] == "First chunk"
+    assert saved_memory["metadata"] == {"source": "test"}
+    assert saved_memory["importance"] == 0.8
+
+    embedding_service.generate_embeddings.assert_awaited_once_with(
+        ["First chunk"]
+    )
+
+async def test_memory_writer_uses_extraction_policy_when_configured():
+    """Extraction policy should take precedence when configured."""
+
+    writer, repository, embedding_service = await create_writer(
+        extraction_response="""
+        {
+            "memories": [
+                {
+                    "content": "Extracted memory.",
+                    "memory_type": "user",
+                    "importance": 0.9,
+                    "metadata": {
+                        "source": "conversation"
+                    }
+                }
+            ]
+        }
+        """
+    )
+
+    writer.chunker.chunk_text = lambda text: pytest.fail(
+        "Chunker should not be used for extraction-policy writes"
+    )
+
+    embedding_service.generate_embeddings = AsyncMock(
+        return_value=[[0.1] * 1024]
+    )
+
+    repository.get_by_content_hash = AsyncMock(return_value=None)
+    repository.save_memories_batch = AsyncMock(return_value=[123])
+
+    result = await writer.write(
+        company_id=uuid4(),
+        text="Some input",
+    )
+
+    assert result == [123]
