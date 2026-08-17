@@ -1,10 +1,10 @@
 # T12 EXPLAIN ANALYZE Writeup: Multi-tenancy Index Tuning
 
-This document demonstrates the before-and-after performance impact of altering the primary keys for `memories`, `campaigns`, and `tasks` to be prefixed with `company_id`.
+This document describes the impact of prefixing the primary keys for `memories`, `campaigns`, and `tasks` with `company_id`.
 
-## The Problem: Scatter-Gather Queries
+## The Problem: Tenant-Scoped Queries
 
-Before the index tuning, our core tables used a generic UUID as the leading column in the primary key:
+Before the index tuning, the core tables used a generic UUID as the leading column in the primary key:
 
 ```sql
 CREATE TABLE memories (
@@ -14,42 +14,44 @@ CREATE TABLE memories (
 );
 ```
 
-When we executed a typical query scoped to a single tenant (e.g., retrieving all memories for a company), the database had to perform a full-cluster scan:
+A typical tenant-scoped query is:
 
 ```sql
-SELECT id, content FROM memories WHERE company_id = '3f2b8c41-6e57-4a92-9d13-7c5e8b24a601';
+SELECT id, content
+FROM memories
+WHERE company_id = '3f2b8c41-6e57-4a92-9d13-7c5e8b24a601';
 ```
 
-**Before Migration:** The `EXPLAIN ANALYZE` output would show a **FULL SCAN** on `memories@memories_pkey`, followed by a filter on `company_id`. Since the data was distributed randomly across the cluster by the UUID `id`, CockroachDB had to send the query to every node in the cluster (a scatter-gather operation), severely limiting our scalability and increasing latency.
+With `id` as the leading primary-key column, the primary key is not ordered by `company_id`, so this query cannot use the primary-key ordering to target a narrow tenant-specific key range.
 
-## The Solution: Hash-Sharded Tenant Prefixing
+## The Solution: Tenant-Prefixed Primary Keys
 
-We applied the `004_multitenancy.sql` migration to alter the primary keys:
+We changed the primary keys to begin with `company_id`:
 
 ```sql
-ALTER TABLE memories ALTER PRIMARY KEY USING COLUMNS (company_id, id);
+ALTER TABLE memories
+ALTER PRIMARY KEY USING COLUMNS (company_id, id);
 ```
 
-By placing `company_id` as the leading column in the primary key, we achieve perfect data locality. All data for a specific company is now physically stored together in contiguous ranges on the same node(s).
+This places each company's records into tenant-prefixed key ranges. Tenant-scoped queries can therefore use the primary-key ordering to target the relevant key spans instead of scanning unrelated tenant keys.
 
-### Post-Migration `EXPLAIN ANALYZE` Results
+### EXPLAIN ANALYZE
 
-Running the exact same query after applying the migration yields the following execution plan:
+The following is an **illustrative expected execution-plan shape**, not a measured benchmark result:
 
-```
-planning time: 1ms
-execution time: 2ms
-distribution: local
-
+```text
 scan
   ...
   table: memories@memories_pkey
   spans: [/'3f2b8c41-6e57-4a92-9d13-7c5e8b24a601' - /'3f2b8c41-6e57-4a92-9d13-7c5e8b24a601']
 ```
 
-**Key Takeaways:**
-1. **Targeted Spans**: Notice the `spans` constraint: `[/'3f2b8c41...']`. CockroachDB now navigates directly to the single continuous block of data containing this company's memories.
-2. **Local Distribution**: The query execution is entirely `local` to the specific leaseholder nodes for that data range, preventing network hops across the cluster.
-3. **Execution Time**: The execution time is dramatically reduced to ~2ms, and this fast performance will remain completely constant regardless of how many *other* companies are added to the cluster.
+The exact planning time, execution time, distribution, and span details depend on the actual cluster state, data volume, and CockroachDB configuration. Actual `EXPLAIN ANALYZE` output should be captured separately when benchmarking the deployed cluster.
 
-This multi-tenancy isolation provides a massive and crucial scaling foundation for the hackathon project.
+**Key Takeaways:**
+
+1. **Tenant-Targeted Spans:** Prefixing the primary key with `company_id` allows tenant-scoped queries to target narrower key ranges.
+2. **Reduced Unrelated Scanning:** Queries can use the tenant prefix to avoid scanning primary-key ranges belonging to unrelated companies.
+3. **Scalable Key Layout:** The tenant-prefixed key layout provides a stronger foundation for multi-tenant query performance as the dataset grows.
+
+This multi-tenancy design provides a solid database foundation for the GrowthPilot hackathon project.
