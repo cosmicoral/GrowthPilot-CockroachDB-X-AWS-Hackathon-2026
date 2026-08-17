@@ -24,6 +24,12 @@ from backend.memory.writer import MemoryWriter
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
 logger = logging.getLogger(__name__)
 
+def chunk_response(text: str, chunk_size: int = 40):
+    """Split a completed response into bounded chunks for SSE delivery."""
+    return [
+        text[i:i + chunk_size]
+        for i in range(0, len(text), chunk_size)
+    ]
 
 class ChatRequest(BaseModel):
     message: str
@@ -150,16 +156,17 @@ async def chat_stream(
 
             planner_output = result.output
 
-            token_event = {
-                "type": "token",
-                "text": planner_output.response,
-            }
+            for chunk in chunk_response(planner_output.response):
+                token_event = {
+                    "type": "token",
+                    "text": chunk,
+                }
 
-            yield (
-                "data: "
-                f"{json.dumps(token_event, ensure_ascii=False)}"
-                "\n\n"
-            )
+                yield (
+                    "data: "
+                    f"{json.dumps(token_event, ensure_ascii=False)}"
+                    "\n\n"
+                )
 
             done_event = {
                 "type": "done",

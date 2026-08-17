@@ -1,3 +1,4 @@
+import json
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -56,13 +57,21 @@ def test_chat_stream_success(
     mock_planner_class,
     company_id,
 ):
-    """Planner output should be emitted as one token and a done event."""
+    """Planner output should be emitted as multiple token events and a done event."""
+
+    planner_response = (
+        "This is a longer planner response that should be emitted "
+        "as multiple SSE token events."
+    )
+
     mock_repo = AsyncMock()
     mock_repo.search.return_value = []
     mock_repo_class.return_value = mock_repo
 
     mock_planner = AsyncMock()
-    mock_planner.run.return_value = planner_success_result()
+    mock_planner.run.return_value = planner_success_result(
+        response = planner_response,
+    )
     mock_planner_class.return_value = mock_planner
 
     response = client.post(
@@ -71,13 +80,35 @@ def test_chat_stream_success(
     )
 
     assert response.status_code == status.HTTP_200_OK
+
     content = response.text
+
     assert 'data: {"type": "memories", "memories": []}\n\n' in content
-    assert 'data: {"type": "token", "text": "Hello World"}\n\n' in content
     assert '"type": "done"' in content
     assert '"partial": false' in content
-    mock_planner.run.assert_awaited_once_with(message="Hi")
+
+    token_events = [
+        line
+        for line in content.splitlines()
+        if line.startswith('data: {"type": "token"')
+    ]
+
+    assert len(token_events) > 1
+
+    token_texts = []
+
+    for event in token_events:
+        data = event.removeprefix("data: ")
+        token_texts.append(json.loads(data)["text"])
+
+    assert "".join(token_texts) == planner_response
+
+    mock_planner.run.assert_awaited_once_with(
+        message="Hi",
+    )
+
     registered_agents = mock_planner_class.call_args.kwargs["agents"]
+
     assert set(registered_agents) == {
         "market_research",
         "content",
@@ -95,6 +126,7 @@ def test_chat_stream_error_event(
     company_id,
 ):
     """A failed planner result should be represented as an SSE error."""
+
     mock_repo = AsyncMock()
     mock_repo.search.return_value = []
     mock_repo_class.return_value = mock_repo
@@ -113,7 +145,9 @@ def test_chat_stream_error_event(
     )
 
     assert response.status_code == status.HTTP_200_OK
+
     content = response.text
+
     assert 'data: {"type": "memories", "memories": []}\n\n' in content
     assert '"type": "error"' in content
     assert "Planner failed" in content
@@ -144,7 +178,10 @@ def test_generate_content_success(
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"content": "Generated post"}
-    mock_agent.run.assert_awaited_once_with(prompt="test prompt")
+
+    mock_agent.run.assert_awaited_once_with(
+        prompt="test prompt",
+    )
 
 
 @patch("backend.api.chat.ContentAgent")
