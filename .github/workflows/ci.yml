@@ -16,7 +16,9 @@ jobs:
           cache: pip
       - run: pip install -e ".[dev]"
       - run: ruff check backend
-      - run: pytest backend/tests -q
+      # Real-cluster tests require DATABASE_URL and belong in a secret-backed
+      # integration workflow, not the unprivileged pull-request runner.
+      - run: pytest backend/tests -q -m "not integration"
 
   frontend:
     runs-on: ubuntu-latest
