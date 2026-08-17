@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react"
 import Logo from "@/components/Logo"
-import { streamChat, type MemoryHit } from "@/api/chat"
+import { streamChat, type MemoryHit, type PlannerMetadata } from "@/api/chat"
 
 interface Message {
   id: string
   role: "ai" | "user"
   text: string
   memories?: MemoryHit[]
+  planner?: PlannerMetadata
   error?: string
 }
 
@@ -93,6 +94,9 @@ export default function AIPartner() {
         onToken(token) {
           setMessages((current) => current.map((message) => message.id === responseId ? { ...message, text: message.text + token } : message))
         },
+        onDone(planner) {
+          setMessages((current) => current.map((message) => message.id === responseId ? { ...message, planner } : message))
+        },
       })
     } catch (error) {
       setMessages((current) => current.map((message) => message.id === responseId
@@ -124,6 +128,11 @@ export default function AIPartner() {
           <div className="chat-message">
             {message.text ? <p>{message.text}</p> : <p className="typing-indicator">GrowthPilot is thinking…</p>}
             {message.error && <div className="form-error" role="alert">{message.error}</div>}
+            {message.role === "ai" && message.planner && <div className="planner-summary">
+              <span>{message.planner.decision.execution}</span>
+              <span>{message.planner.decision.intents.join(" + ")}</span>
+              {message.planner.partial && <strong>Partial result · {message.planner.failed_agents.join(", ")} unavailable</strong>}
+            </div>}
             {message.role === "ai" && message.memories && message.memories.length > 0 && <MemoryInspector memories={message.memories} />}
           </div>
         </div>)}

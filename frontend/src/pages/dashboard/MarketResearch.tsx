@@ -1,176 +1,186 @@
-import type { CSSProperties } from "react"
+import { useEffect, useMemo, useState } from "react"
+import type { MemoryHit } from "@/api/chat"
+import {
+  getResearchMemories,
+  runMarketResearch,
+  type ResearchCategory,
+  type ResearchChunk,
+} from "@/api/research"
 
-const card: CSSProperties = {
-  background: "rgba(255,255,255,0.5)",
-  border: "1.5px solid rgba(255,255,255,0.65)",
-  borderRadius: 16,
-  padding: "20px",
-  backdropFilter: "blur(6px)",
+interface ResearchItem {
+  id: string
+  content: string
+  category: ResearchCategory
+  timestamp?: string
+  verified: boolean
 }
 
-const COMPETITORS = [
-  { name: "Competitor.io", score: 82, strength: "Strong brand awareness", weakness: "Weak onboarding UX" },
-  { name: "GrowBase", score: 71, strength: "Deep GTM templates", weakness: "No AI assistant" },
-  { name: "StrategyAI", score: 68, strength: "Fast content gen", weakness: "No market research" },
+const SECTIONS: Array<{ category: ResearchCategory; title: string; description: string }> = [
+  { category: "competitors", title: "Competitor landscape", description: "Positioning, strengths, weaknesses, and differentiation signals." },
+  { category: "trends", title: "Industry trends", description: "Tailwinds, shifts, and opportunities relevant to your market." },
+  { category: "pain_points", title: "Customer pain points", description: "Repeated friction, unmet needs, and buying obstacles." },
+  { category: "general", title: "Additional findings", description: "Useful context that does not fit the focused categories above." },
 ]
 
-const REDDIT_POSTS = [
-  { sub: "r/startups", signal: "Pain", text: "Why does every GTM tool assume you already know your ICP? We need help figuring that out first.", upvotes: 847 },
-  { sub: "r/SaaS", signal: "Pain", text: "AI content generators are useless without strategic context. It's just word salad unless the AI knows your market.", upvotes: 412 },
-  { sub: "r/Entrepreneur", signal: "Signal", text: "Founder who added positioning clarity to their pitch saw close rate go from 14% → 38% in one quarter.", upvotes: 1204 },
-]
+function categoryFromMetadata(metadata: Record<string, unknown>): ResearchCategory {
+  const category = metadata.category
+  return category === "competitors" || category === "trends" || category === "pain_points"
+    ? category
+    : "general"
+}
 
-const PAIN_POINTS = [
-  "Founders don't know how to differentiate from funded competitors",
-  "ICP is too broad — every feature is built for 'everyone'",
-  "Content doesn't resonate because messaging isn't positioning-led",
-  "No systematic way to track competitor moves and adapt strategy",
-]
+function itemFromMemory(memory: MemoryHit): ResearchItem {
+  return {
+    id: memory.id,
+    content: memory.content,
+    category: categoryFromMetadata(memory.metadata),
+    timestamp: typeof memory.metadata.timestamp === "string" ? memory.metadata.timestamp : memory.created_at,
+    verified: memory.metadata.verified === true,
+  }
+}
 
-const TRENDS = [
-  { name: "AI-native GTM tools", growth: "+187% YoY" },
-  { name: "Founder-led sales content", growth: "+94% YoY" },
-  { name: "Positioning-first frameworks", growth: "+63% YoY" },
-  { name: "Market intelligence SaaS", growth: "+121% YoY" },
-]
+function itemFromChunk(chunk: ResearchChunk, index: number): ResearchItem {
+  return {
+    id: `research-${index}`,
+    content: chunk.content,
+    category: chunk.category || chunk.metadata.category || "general",
+    timestamp: chunk.metadata.timestamp,
+    verified: chunk.metadata.verified === true,
+  }
+}
+
+function formatTimestamp(value?: string) {
+  if (!value) return "Saved research"
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime())
+    ? "Saved research"
+    : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(parsed)
+}
 
 export default function MarketResearch() {
+  const [items, setItems] = useState<ResearchItem[]>([])
+  const [customText, setCustomText] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [isRunning, setIsRunning] = useState(false)
+  const [error, setError] = useState("")
+  const [runSummary, setRunSummary] = useState("")
+
+  async function loadSavedResearch() {
+    setError("")
+    try {
+      const memories = await getResearchMemories()
+      setItems(memories.map(itemFromMemory))
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Saved research could not be loaded.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadSavedResearch()
+  }, [])
+
+  async function handleRunResearch() {
+    if (isRunning) return
+    setError("")
+    setRunSummary("")
+    setIsRunning(true)
+
+    try {
+      const response = await runMarketResearch(customText)
+      const chunks = response.output.structured_chunks || []
+      setItems(chunks.map(itemFromChunk))
+      setRunSummary(
+        `${response.output.memories_created ?? chunks.length} new research memories saved` +
+        (response.output.memories_deduplicated ? ` · ${response.output.memories_deduplicated} reused` : ""),
+      )
+      setCustomText("")
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Market research could not be completed.")
+    } finally {
+      setIsRunning(false)
+    }
+  }
+
+  const groupedItems = useMemo(() => Object.fromEntries(
+    SECTIONS.map(({ category }) => [category, items.filter((item) => item.category === category)]),
+  ) as Record<ResearchCategory, ResearchItem[]>, [items])
+
   return (
-    <div style={{ fontFamily: "'Oranienbaum', serif" }}>
-      <h1 style={{
-        fontFamily: "'Playfair Display', serif",
-        fontSize: 28,
-        fontWeight: 700,
-        color: "#0d2137",
-        margin: "0 0 24px",
-        background: "rgba(74,122,181,0.15)",
-        display: "inline-block",
-        padding: "6px 16px",
-        borderRadius: 8,
-      }}>
-        Market Research
-      </h1>
-      <p className="demo-data-badge">Demo preview · connect the Market Research Agent output before presenting this as live research.</p>
-
-      <div className="dashboard-two-column" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-        {/* Competitor Analysis */}
-        <div style={card}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 16px" }}>Competitor Analysis</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {COMPETITORS.map((c) => (
-              <div key={c.name} style={{ borderBottom: "1px solid rgba(74,122,181,0.12)", paddingBottom: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                  <span style={{
-                    fontSize: 15, fontWeight: 600, background: "rgba(74,122,181,0.15)",
-                    color: "#0d2137", borderRadius: 6, padding: "3px 10px",
-                  }}>{c.name}</span>
-                  <span style={{
-                    fontSize: 13, fontWeight: 700, background: c.score >= 80 ? "rgba(239,68,68,0.12)" : "rgba(74,122,181,0.12)",
-                    color: c.score >= 80 ? "#dc2626" : "#2d5a8e",
-                    borderRadius: 6, padding: "3px 10px",
-                  }}>Score: {c.score}</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                  <div style={{ background: "rgba(34,197,94,0.1)", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#166534" }}>
-                    ↑ {c.strength}
-                  </div>
-                  <div style={{ background: "rgba(239,68,68,0.1)", borderRadius: 6, padding: "5px 10px", fontSize: 12, color: "#991b1b" }}>
-                    ↓ {c.weakness}
-                  </div>
-                </div>
-                <div style={{ marginTop: 6, height: 3, background: "rgba(74,122,181,0.12)", borderRadius: 2 }}>
-                  <div style={{ height: "100%", width: `${c.score}%`, background: "#4a7ab5", borderRadius: 2 }} />
-                </div>
-              </div>
-            ))}
-          </div>
+    <section className="research-page" aria-labelledby="market-research-heading">
+      <header className="dashboard-page-heading">
+        <div>
+          <p className="dashboard-kicker">LIVE AGENT WORKSPACE</p>
+          <h1 id="market-research-heading">Market Research</h1>
         </div>
+        <span className="connection-badge">● Connected to Market Research Agent</span>
+      </header>
 
-        {/* Reddit Discussions */}
-        <div style={card}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 16px" }}>Reddit Discussions</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {REDDIT_POSTS.map((post, i) => (
-              <div key={i} style={{ borderBottom: "1px solid rgba(74,122,181,0.12)", paddingBottom: 12 }}>
-                <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-                  <span style={{
-                    fontSize: 12, fontWeight: 600, color: "#ff6b35",
-                    background: "rgba(255,107,53,0.1)", borderRadius: 5, padding: "2px 8px",
-                  }}>{post.sub}</span>
-                  <span style={{
-                    fontSize: 12, fontWeight: 600,
-                    background: post.signal === "Pain" ? "rgba(239,68,68,0.1)" : "rgba(34,197,94,0.1)",
-                    color: post.signal === "Pain" ? "#dc2626" : "#166534",
-                    borderRadius: 5, padding: "2px 8px",
-                  }}>{post.signal}</span>
-                </div>
-                <div style={{
-                  background: "rgba(74,122,181,0.1)",
-                  borderRadius: 8,
-                  padding: "10px 12px",
-                  fontSize: 15,
-                  color: "#0d2137",
-                  lineHeight: 1.45,
-                  marginBottom: 6,
-                }}>
-                  "{post.text}"
-                </div>
-                <span style={{ fontSize: 12, color: "#4a7ab5", fontWeight: 600 }}>▲ {post.upvotes.toLocaleString()} upvotes</span>
-              </div>
-            ))}
-          </div>
+      <div className="research-run-card">
+        <div>
+          <h2>Refresh your market context</h2>
+          <p>Run the agent from your saved company profile, or paste trusted source text for it to structure and remember.</p>
+        </div>
+        <label htmlFor="research-source">Optional source text</label>
+        <textarea
+          id="research-source"
+          value={customText}
+          onChange={(event) => setCustomText(event.target.value)}
+          placeholder="Paste interview notes, competitor research, or another source. Leave empty to use Bedrock research."
+          rows={4}
+          disabled={isRunning}
+        />
+        <div className="research-actions">
+          <span>AI-generated findings remain marked unverified until you confirm them.</span>
+          <button type="button" onClick={() => void handleRunResearch()} disabled={isRunning}>
+            {isRunning ? "Researching…" : "Run market research →"}
+          </button>
         </div>
       </div>
 
-      <div className="dashboard-two-column" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {/* Customer Pain Points */}
-        <div style={card}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 14px" }}>Customer Pain Points</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {PAIN_POINTS.map((p, i) => (
-              <div key={i} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                <div style={{
-                  width: 20, height: 20, borderRadius: 5,
-                  background: "#4a7ab5", color: "#fff",
-                  fontSize: 11, fontWeight: 700,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0, marginTop: 1,
-                }}>
-                  {i + 1}
-                </div>
-                <div style={{
-                  flex: 1, background: "rgba(74,122,181,0.1)",
-                  borderRadius: 8, padding: "8px 12px",
-                  fontSize: 15, color: "#1a3a5c", lineHeight: 1.45,
-                }}>
-                  {p}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {error && <div className="form-error" role="alert">{error}</div>}
+      {runSummary && <p className="research-success" role="status">✓ {runSummary}</p>}
 
-        {/* Market Trends */}
-        <div style={card}>
-          <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 14px" }}>Market Trends & Insights</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {TRENDS.map((t, i) => (
-              <div key={i} style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                background: "rgba(74,122,181,0.1)", borderRadius: 8, padding: "10px 14px",
-              }}>
-                <span style={{ fontSize: 15, fontWeight: 600, color: "#0d2137" }}>{t.name}</span>
-                <span style={{
-                  fontSize: 12, fontWeight: 700,
-                  background: "rgba(34,197,94,0.15)",
-                  color: "#166534",
-                  borderRadius: 6, padding: "3px 10px",
-                }}>{t.growth}</span>
-              </div>
-            ))}
-          </div>
+      {isLoading ? (
+        <div className="research-empty" aria-live="polite">Loading saved market research…</div>
+      ) : items.length === 0 ? (
+        <div className="research-empty">
+          <strong>No research memories yet.</strong>
+          <span>Run the Market Research Agent to create the first evidence-backed workspace.</span>
         </div>
-      </div>
-    </div>
+      ) : (
+        <div className="research-section-grid">
+          {SECTIONS.map((section) => {
+            const sectionItems = groupedItems[section.category]
+            if (sectionItems.length === 0) return null
+            return (
+              <article className="research-section" key={section.category}>
+                <header>
+                  <div>
+                    <h2>{section.title}</h2>
+                    <p>{section.description}</p>
+                  </div>
+                  <span>{sectionItems.length}</span>
+                </header>
+                <div className="research-finding-list">
+                  {sectionItems.map((item) => (
+                    <div className="research-finding" key={item.id}>
+                      <p>{item.content}</p>
+                      <footer>
+                        <span>{formatTimestamp(item.timestamp)}</span>
+                        <span className={item.verified ? "research-verified" : "research-unverified"}>
+                          {item.verified ? "Verified" : "Unverified AI finding"}
+                        </span>
+                      </footer>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </section>
   )
 }

@@ -7,6 +7,7 @@ import OnboardingPage from "@/pages/OnboardingPage"
 import DashboardLayout from "@/pages/dashboard/DashboardLayout"
 import DashboardHome from "@/pages/dashboard/DashboardHome"
 import MarketResearch from "@/pages/dashboard/MarketResearch"
+import GrowthGraph from "@/pages/dashboard/GrowthGraph"
 import GTMStrategy from "@/pages/dashboard/GTMStrategy"
 import ContentCreation from "@/pages/dashboard/ContentCreation"
 import AIPartner from "@/pages/dashboard/AIPartner"
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/dashboard" element={<RequireSession><DashboardLayout /></RequireSession>}>
           <Route index element={<DashboardHome />} />
           <Route path="market" element={<MarketResearch />} />
+          <Route path="growthgraph" element={<GrowthGraph />} />
           <Route path="gtm" element={<GTMStrategy />} />
           <Route path="content" element={<ContentCreation />} />
           <Route path="ai-partner" element={<AIPartner />} />

@@ -10,6 +10,18 @@ const NAV_ICONS: Record<string, React.JSX.Element> = {
       <polyline points="11,3 15,3 15,7" />
     </svg>
   ),
+  GrowthGraph: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="3" cy="8" r="1.5" />
+      <circle cx="8" cy="3" r="1.5" />
+      <circle cx="13" cy="8" r="1.5" />
+      <circle cx="8" cy="13" r="1.5" />
+      <line x1="4.1" y1="6.9" x2="6.9" y2="4.1" />
+      <line x1="9.1" y1="4.1" x2="11.9" y2="6.9" />
+      <line x1="11.9" y1="9.1" x2="9.1" y2="11.9" />
+      <line x1="6.9" y1="11.9" x2="4.1" y2="9.1" />
+    </svg>
+  ),
   GTM: (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="8" cy="8" r="6.5" />
@@ -40,6 +52,7 @@ const NAV_ICONS: Record<string, React.JSX.Element> = {
 
 const NAV_ITEMS = [
   { label: "Market", path: "/dashboard/market" },
+  { label: "GrowthGraph", path: "/dashboard/growthgraph" },
   { label: "GTM", path: "/dashboard/gtm" },
   { label: "Content", path: "/dashboard/content" },
   { label: "AI Partner", path: "/dashboard/ai-partner" },
@@ -71,6 +84,10 @@ export default function DashboardLayout() {
       .catch((error) => active && setSessionError(error instanceof Error ? error.message : "Profile unavailable"))
     return () => { active = false }
   }, [])
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" })
+  }, [location.pathname])
 
   async function handleLogout() {
     setSessionError("")
@@ -393,6 +410,8 @@ export default function DashboardLayout() {
               return (
                 <button
                   key={item.path}
+                  className="dashboard-nav-item"
+                  title={item.label}
                   onClick={() => navigate(item.path)}
                   style={{
                     flex: 1,
@@ -418,7 +437,7 @@ export default function DashboardLayout() {
                   onMouseLeave={e => { if (!active) e.currentTarget.style.color = "rgba(255,255,255,0.45)" }}
                 >
                   <span style={{ opacity: active ? 1 : 0.7, display: "flex" }}>{NAV_ICONS[item.label]}</span>
-                  {item.label}
+                  <span className="dashboard-nav-label">{item.label}</span>
                   {active && (
                     <span style={{
                       position: "absolute",

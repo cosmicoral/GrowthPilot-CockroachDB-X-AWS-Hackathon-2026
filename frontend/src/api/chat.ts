@@ -18,15 +18,26 @@ export interface MemoryHit {
   created_at: string
 }
 
+export interface PlannerMetadata {
+  decision: {
+    intents: string[]
+    execution: "single" | "sequential" | "parallel"
+    reason: string
+  }
+  partial: boolean
+  failed_agents: string[]
+}
+
 type StreamEvent =
   | { type: "memories"; memories: MemoryHit[] }
   | { type: "token"; text: string }
-  | { type: "done" }
+  | { type: "done"; metadata: PlannerMetadata }
   | { type: "error"; detail: string }
 
 interface StreamHandlers {
   onMemories: (memories: MemoryHit[]) => void
   onToken: (text: string) => void
+  onDone?: (metadata: PlannerMetadata) => void
 }
 
 function parseEvent(block: string): StreamEvent | null {
@@ -59,7 +70,10 @@ export async function streamChat(message: string, handlers: StreamHandlers) {
       if (event.type === "memories") handlers.onMemories(event.memories)
       if (event.type === "token") handlers.onToken(event.text)
       if (event.type === "error") throw new Error(event.detail)
-      if (event.type === "done") return
+      if (event.type === "done") {
+        handlers.onDone?.(event.metadata)
+        return
+      }
     }
 
     if (done) break
