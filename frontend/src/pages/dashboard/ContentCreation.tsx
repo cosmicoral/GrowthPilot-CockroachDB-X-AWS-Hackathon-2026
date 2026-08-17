@@ -2,6 +2,8 @@ import { useState } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { generateContent } from "@/api/chat"
 
 const CONTENT_TABS = ["LinkedIn Post", "X Thread", "Email Campaign", "Landing Page Copy"]
 
@@ -134,11 +136,29 @@ TESTIMONIALS:
 export default function ContentCreation() {
   const [activeTab, setActiveTab] = useState("LinkedIn Post")
   const [copied, setCopied] = useState(false)
+  const [prompt, setPrompt] = useState("")
+  const [contentByTab, setContentByTab] = useState(CONTENT_SAMPLES)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [error, setError] = useState("")
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(CONTENT_SAMPLES[activeTab])
+    navigator.clipboard.writeText(contentByTab[activeTab])
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleGenerate() {
+    setError("")
+    setIsGenerating(true)
+    try {
+      const request = prompt.trim() || `Create a ${activeTab} using the company's saved strategy, audience, and previous campaign memories.`
+      const result = await generateContent(request)
+      setContentByTab((current) => ({ ...current, [activeTab]: result.content }))
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Content generation failed.")
+    } finally {
+      setIsGenerating(false)
+    }
   }
 
   return (
@@ -156,6 +176,15 @@ export default function ContentCreation() {
       }}>
         Content Creation
       </h1>
+
+      <div className="content-prompt-card">
+        <label htmlFor="content-prompt">What should GrowthPilot create?</label>
+        <div>
+          <Input id="content-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="A LinkedIn post about our strongest positioning insight…" />
+          <button disabled={isGenerating} type="button" onClick={() => void handleGenerate()}>{isGenerating ? "Generating…" : "Generate with AI"}</button>
+        </div>
+        {error && <div className="form-error" role="alert">{error}</div>}
+      </div>
 
       {/* shadcn Tabs — styled to match existing tab buttons exactly */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -183,6 +212,8 @@ export default function ContentCreation() {
                 </h2>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
+                    disabled={isGenerating}
+                    onClick={() => void handleGenerate()}
                     style={{
                       background: "rgba(74,122,181,0.12)",
                       border: "1px solid rgba(74,122,181,0.25)",
@@ -198,7 +229,7 @@ export default function ContentCreation() {
                     onMouseEnter={e => (e.currentTarget.style.background = "rgba(74,122,181,0.22)")}
                     onMouseLeave={e => (e.currentTarget.style.background = "rgba(74,122,181,0.12)")}
                   >
-                    [ Regenerate ]
+                    {isGenerating ? "[ Generating… ]" : "[ Regenerate ]"}
                   </button>
                   <button
                     onClick={handleCopy}
@@ -223,15 +254,15 @@ export default function ContentCreation() {
               {tab === "LinkedIn Post" && (
                 <div style={{ marginBottom: 14 }}>
                   <Badge variant="memoryTag">
-                    🧠 Based on 1 reflection memory
+                    🧠 Generated with saved company context
                   </Badge>
                 </div>
               )}
 
               {/* shadcn Textarea — styled to match existing exactly */}
               <Textarea
-                readOnly
-                value={CONTENT_SAMPLES[tab]}
+                value={contentByTab[tab]}
+                onChange={(event) => setContentByTab((current) => ({ ...current, [tab]: event.target.value }))}
               />
             </div>
           </TabsContent>

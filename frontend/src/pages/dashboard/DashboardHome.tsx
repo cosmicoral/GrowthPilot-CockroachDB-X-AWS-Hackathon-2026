@@ -1,5 +1,6 @@
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useOutletContext } from "react-router-dom"
 import type { CSSProperties } from "react"
+import type { CompanyProfile } from "@/api/auth"
 
 const NEWS = [
   {
@@ -62,6 +63,7 @@ const card: CSSProperties = {
 
 export default function DashboardHome() {
   const navigate = useNavigate()
+  const { company } = useOutletContext<{ company: CompanyProfile | null }>()
   const maxVal = Math.max(...WEEKLY_DATA)
 
   return (
@@ -73,12 +75,13 @@ export default function DashboardHome() {
           Dashboard
         </h1>
         <p style={{ fontFamily: "'Oranienbaum', serif", fontSize: 16, color: "rgb(255,255,255)", margin: 0 }}>
-          Good morning, Jane — here's what's happening in your market today.
+          Welcome back{company?.name ? `, ${company.name}` : ""} — here's your GrowthPilot workspace.
         </p>
+        <span className="demo-data-badge">Demo dashboard data · AI Partner and Content use live APIs</span>
       </div>
 
       {/* ── Row 1: KPI stat tiles ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+      <div className="dashboard-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
         {KPI.map(k => (
           <div key={k.label} style={{
             ...card,
@@ -107,7 +110,7 @@ export default function DashboardHome() {
       </div>
 
       {/* ── Row 2: News feed (left) + Growth chart & Tips (right) ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 16, alignItems: "start" }}>
+      <div className="dashboard-main-grid" style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 16, alignItems: "start" }}>
 
         {/* News feed */}
         <div style={card}>
@@ -267,7 +270,7 @@ export default function DashboardHome() {
           </span>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+        <div className="analytics-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
 
           {/* Topic comparison */}
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>

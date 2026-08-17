@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useNavigate, useLocation, Outlet } from "react-router-dom"
 import Logo from "@/components/Logo"
+import { getCurrentCompany, logout as logoutSession, type CompanyProfile } from "@/api/auth"
 
 const NAV_ICONS: Record<string, React.JSX.Element> = {
   Market: (
@@ -50,6 +51,8 @@ export default function DashboardLayout() {
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [navOpen, setNavOpen] = useState(true)
   const [footerVisible, setFooterVisible] = useState(false)
+  const [company, setCompany] = useState<CompanyProfile | null>(null)
+  const [sessionError, setSessionError] = useState("")
   const footerRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -60,6 +63,31 @@ export default function DashboardLayout() {
     if (footerRef.current) observer.observe(footerRef.current)
     return () => observer.disconnect()
   }, [])
+
+  useEffect(() => {
+    let active = true
+    getCurrentCompany()
+      .then((profile) => active && setCompany(profile))
+      .catch((error) => active && setSessionError(error instanceof Error ? error.message : "Profile unavailable"))
+    return () => { active = false }
+  }, [])
+
+  async function handleLogout() {
+    setSessionError("")
+    try {
+      await logoutSession()
+      navigate("/login", { replace: true })
+    } catch (error) {
+      setSessionError(error instanceof Error ? error.message : "Sign out failed")
+    }
+  }
+
+  const initials = company?.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "GP"
 
   const isHome = location.pathname === "/dashboard"
 
@@ -147,7 +175,7 @@ export default function DashboardLayout() {
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontFamily: "'Oranienbaum', serif",
               }}
-            >JS</button>
+            >{initials}</button>
             {avatarOpen && (
               <div style={{
                 position: "absolute", top: 44, right: 0,
@@ -160,28 +188,29 @@ export default function DashboardLayout() {
                 zIndex: 100,
               }}>
                 <div style={{ padding: "8px 16px 10px", borderBottom: "1px solid rgba(74,122,181,0.12)" }}>
-                  <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0d2137" }}>Jane Smith</p>
-                  <p style={{ margin: 0, fontSize: 15, color: "#4a7ab5" }}>jane@company.com</p>
+                  <p style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#0d2137" }}>{company?.name || "GrowthPilot workspace"}</p>
+                  <p style={{ margin: 0, fontSize: 15, color: "#4a7ab5" }}>{company?.email || "Loading profile…"}</p>
                 </div>
                 <button
-                  onClick={() => { navigate("/"); setAvatarOpen(false) }}
+                  onClick={() => { setAvatarOpen(false); void handleLogout() }}
                   style={{ display: "block", width: "100%", background: "none", border: "none", padding: "9px 16px", textAlign: "left", fontSize: 15, color: "#0d2137", cursor: "pointer", fontFamily: "'Oranienbaum', serif" }}
                   onMouseEnter={e => (e.currentTarget.style.background = "rgba(74,122,181,0.08)")}
                   onMouseLeave={e => (e.currentTarget.style.background = "none")}
                 >Sign out</button>
+                {sessionError && <p role="alert" style={{ padding: "4px 16px", color: "#991b1b", fontSize: 13 }}>{sessionError}</p>}
               </div>
             )}
           </div>
         </header>
 
         {/* ── Page content ── */}
-        <main style={{
+        <main className="dashboard-content" style={{
           flex: 1,
           padding: "28px 32px 80px",
           boxSizing: "border-box",
           minWidth: 0,
         }}>
-          <Outlet />
+          <Outlet context={{ company }} />
         </main>
 
         {/* ── Footer ── */}
@@ -192,7 +221,7 @@ export default function DashboardLayout() {
           borderTop: "1px solid rgba(255,255,255,0.1)",
           padding: "36px 48px 28px",
         }}>
-          <div style={{
+          <div className="footer-grid" style={{
             display: "grid",
             gridTemplateColumns: "1fr auto auto auto",
             alignItems: "start",

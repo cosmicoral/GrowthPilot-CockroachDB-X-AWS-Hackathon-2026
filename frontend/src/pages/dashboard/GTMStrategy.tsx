@@ -68,6 +68,7 @@ export default function GTMStrategy() {
       }}>
         GTM Strategy
       </h1>
+      <p className="demo-data-badge">Demo strategy preview · generated strategy will replace these fixtures when the agent endpoint lands.</p>
 
       {/* Positioning statement */}
       <div style={{ ...card, marginBottom: 16 }}>
@@ -90,7 +91,7 @@ export default function GTMStrategy() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+      <div className="dashboard-two-column" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
         {/* Customer Personas */}
         <div style={card}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 16px" }}>Customer Personas</h2>
@@ -174,7 +175,7 @@ export default function GTMStrategy() {
         <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 16px" }}>
           Marketing Strategy — 3 Phase Timeline
         </h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+        <div className="dashboard-three-column" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
           {PHASES.map((phase) => (
             <div key={phase.label} style={{
               background: phase.color,

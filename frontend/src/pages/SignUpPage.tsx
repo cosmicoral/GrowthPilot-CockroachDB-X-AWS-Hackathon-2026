@@ -3,16 +3,28 @@ import { useNavigate } from "react-router-dom"
 import Logo from "@/components/Logo"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { signup } from "@/api/auth"
 
 export default function SignUpPage() {
   const navigate = useNavigate()
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [error, setError] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    navigate("/dashboard")
+    setError("")
+    setIsSubmitting(true)
+    try {
+      await signup({ name: name.trim(), email: email.trim(), password })
+      navigate("/onboarding", { replace: true })
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Account creation failed.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -81,6 +93,8 @@ export default function SignUpPage() {
               Full Name
             </label>
             <Input
+              autoComplete="organization"
+              disabled={isSubmitting}
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
@@ -93,6 +107,8 @@ export default function SignUpPage() {
               Email
             </label>
             <Input
+              autoComplete="email"
+              disabled={isSubmitting}
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -105,6 +121,10 @@ export default function SignUpPage() {
               Password
             </label>
             <Input
+              autoComplete="new-password"
+              disabled={isSubmitting}
+              minLength={8}
+              maxLength={128}
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -113,11 +133,14 @@ export default function SignUpPage() {
             />
           </div>
 
+          {error && <div className="form-error" role="alert">{error}</div>}
+
           <Button
+            disabled={isSubmitting}
             type="submit"
             style={{ marginTop: 4 }}
           >
-            [ Create Account ]
+            {isSubmitting ? "[ Creating Account… ]" : "[ Create Account ]"}
           </Button>
 
           <Button

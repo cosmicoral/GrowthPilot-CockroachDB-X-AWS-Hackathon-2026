@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import Logo from "@/components/Logo"
-import heroBg from "@/imports/image.png"
 
 const HERO_IMAGES = [
   { url: "https://images.unsplash.com/photo-1617761141732-d481912af1a9?w=400&h=300&fit=crop&auto=format&q=50", fallback: "#1a3a5c" },
@@ -88,7 +87,7 @@ export default function LandingPage() {
         <div style={{
           position: "absolute",
           inset: 0,
-          backgroundImage: `url(${heroBg})`,
+          backgroundImage: "url(/hero-bg.jpg)",
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundColor: "#1a3a5c",
@@ -163,7 +162,7 @@ export default function LandingPage() {
         </div>
 
         {/* Center-left: Brand name + CTA */}
-        <div style={{
+        <div className="hero-content" style={{
           position: "absolute",
           top: "45%",
           transform: "translateY(-50%)",
@@ -171,9 +170,9 @@ export default function LandingPage() {
           maxWidth: 900,
           zIndex: 5,
         }}>
-          <h1 style={{
+          <h1 className="hero-title" style={{
             fontFamily: "'Lobster Two', cursive",
-            fontSize: "clamp(92px, 11.5vw, 165px)",
+            fontSize: "clamp(54px, 11.5vw, 165px)",
             fontWeight: 700,
             color: "#ffffff",
             margin: "0 0 28px 0",
@@ -260,7 +259,7 @@ export default function LandingPage() {
               letterSpacing: "-0.045em",
               color: "#0d0d13",
             }}>
-              More than an AI assistant, your long-term partner for positioning, messaging, and growth.
+              A memory-aware AI partner for positioning, messaging, and growth.
             </p>
           </div>
 
@@ -316,7 +315,7 @@ export default function LandingPage() {
         </div>
 
         {/* 4 plan cards */}
-        <div style={{
+        <div className="pricing-grid" style={{
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
           gap: 16,
@@ -461,7 +460,7 @@ export default function LandingPage() {
           </h2>
 
           {/* 4-col feature grid */}
-          <div style={{
+          <div className="feature-grid" style={{
             display: "grid",
             gridTemplateColumns: "repeat(4, 1fr)",
             gap: 16,
@@ -539,7 +538,7 @@ export default function LandingPage() {
                 Ready to stop guessing and start growing?
               </h3>
               <p style={{ fontFamily: "'Playfair Display SC', serif", margin: 0, fontSize: 12, color: "rgba(255,255,255,0.7)" }}>
-                Join 1,200+ founders who use GrowthPilot as their strategic co-pilot.
+            Build your go-to-market strategy with an AI partner that remembers the context.
               </p>
             </div>
             <button
@@ -575,7 +574,7 @@ export default function LandingPage() {
         borderTop: "1px solid rgba(255,255,255,0.1)",
         padding: "36px 48px 28px",
       }}>
-        <div style={{
+        <div className="footer-grid" style={{
           display: "grid",
           gridTemplateColumns: "1fr auto auto auto",
           alignItems: "start",

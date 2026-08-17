@@ -50,8 +50,9 @@ export default function MarketResearch() {
       }}>
         Market Research
       </h1>
+      <p className="demo-data-badge">Demo preview · connect the Market Research Agent output before presenting this as live research.</p>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+      <div className="dashboard-two-column" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
         {/* Competitor Analysis */}
         <div style={card}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 16px" }}>Competitor Analysis</h2>
@@ -121,7 +122,7 @@ export default function MarketResearch() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div className="dashboard-two-column" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
         {/* Customer Pain Points */}
         <div style={card}>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 14px" }}>Customer Pain Points</h2>
