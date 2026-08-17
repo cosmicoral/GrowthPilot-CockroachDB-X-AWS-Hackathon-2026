@@ -48,6 +48,11 @@ const NAV_ICONS: Record<string, React.JSX.Element> = {
       <line x1="11" y1="7" x2="11" y2="7" strokeWidth="2" strokeLinecap="round" />
     </svg>
   ),
+  Activity: (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12V8M6 12V4M10 12V6M14 12V2" />
+    </svg>
+  ),
 }
 
 const NAV_ITEMS = [
@@ -56,6 +61,7 @@ const NAV_ITEMS = [
   { label: "GTM", path: "/dashboard/gtm" },
   { label: "Content", path: "/dashboard/content" },
   { label: "AI Partner", path: "/dashboard/ai-partner" },
+  { label: "Activity", path: "/dashboard/activity" },
 ]
 
 export default function DashboardLayout() {

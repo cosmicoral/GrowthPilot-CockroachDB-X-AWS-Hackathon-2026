@@ -11,6 +11,7 @@ import GrowthGraph from "@/pages/dashboard/GrowthGraph"
 import GTMStrategy from "@/pages/dashboard/GTMStrategy"
 import ContentCreation from "@/pages/dashboard/ContentCreation"
 import AIPartner from "@/pages/dashboard/AIPartner"
+import AgentActivity from "@/pages/dashboard/AgentActivity"
 import { ApiError } from "@/api/client"
 import { getCurrentCompany } from "@/api/auth"
 
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="gtm" element={<GTMStrategy />} />
           <Route path="content" element={<ContentCreation />} />
           <Route path="ai-partner" element={<AIPartner />} />
+          <Route path="activity" element={<AgentActivity />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

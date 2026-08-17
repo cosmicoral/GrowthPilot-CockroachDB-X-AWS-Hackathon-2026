@@ -1,465 +1,196 @@
-import { useNavigate, useOutletContext } from "react-router-dom"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import type { CSSProperties } from "react"
+import { useNavigate, useOutletContext } from "react-router-dom"
 import type { CompanyProfile } from "@/api/auth"
-import { searchMemories, streamChat } from "@/api/chat"
+import {
+  getLatestAnalyticsReflection,
+  runAnalyticsReflection,
+  type GroupPerformance,
+} from "@/api/analytics"
 import type { MemoryHit } from "@/api/chat"
-
-const NEWS = [
-  {
-    tag: "AI & SaaS",
-    timestamp: "2h ago",
-    headline: "OpenAI launches operator-mode GPT for enterprise positioning teams",
-    summary: "New API endpoints let businesses embed context-aware growth agents directly into their CRM workflows.",
-    img: "https://images.unsplash.com/photo-1677442135068-5d67a0f4c38d?w=80&h=80&fit=crop&auto=format",
-  },
-  {
-    tag: "B2B Marketing",
-    timestamp: "5h ago",
-    headline: "LinkedIn engagement rates for thought-leadership posts up 34% in Q3 2026",
-    summary: "Long-form carousel posts outperform text-only by 2.4×. Founders posting 3×/week see highest inbound.",
-    img: "https://images.unsplash.com/photo-1611944212129-29977ae1398c?w=80&h=80&fit=crop&auto=format",
-  },
-  {
-    tag: "Funding",
-    timestamp: "1d ago",
-    headline: "Series A rounds in AI-native SaaS average $14M — up from $8M in 2025",
-    summary: "Investors are prioritizing GTM clarity and retention metrics over raw ARR growth in current climate.",
-    img: "https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=80&h=80&fit=crop&auto=format",
-  },
-  {
-    tag: "Product",
-    timestamp: "2d ago",
-    headline: "Positioning-first companies show 40% lower CAC than feature-led peers",
-    summary: "A new Reforge study confirms that clear ICP definition at pre-seed reduces paid acquisition costs.",
-    img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&h=80&fit=crop&auto=format",
-  },
-]
-
-const WEEKLY_DATA = [42, 58, 51, 67, 74, 82]
-const WEEKS = ["W1", "W2", "W3", "W4", "W5", "W6"]
-
-const TIPS = [
-  "Refine your ICP by adding a 'Job to be Done' framing to each persona.",
-  "Your LinkedIn post frequency is below target — aim for 3 posts this week.",
-  "Update your positioning statement with Q3 competitor movements.",
-]
-
-const KPI = [
-  { label: "Growth Score", value: "74", unit: "/ 100", color: "#4a7ab5" },
-  { label: "Leads This Week", value: "142", unit: "total", color: "#2d8a4e" },
-  { label: "Content Pieces", value: "38", unit: "published", color: "#6d28d9" },
-]
-
-const ANALYTICS_TOPICS = [
-  { topic: "Engineering workflows", likes: 119, comments: 26, clicks: 53, avg: 99 },
-  { topic: "AI automation", likes: 44, comments: 8, clicks: 18, avg: 35 },
-]
-
-const REFLECTION_QUERY = "LinkedIn campaign performance engineering workflows AI automation reflection"
-const ANALYTICS_PROMPT = [
-  "Run the Analytics & Reflection Agent on our simulated LinkedIn campaign performance.",
-  "Compare results by theme, produce a concise hypothesis and next experiment,",
-  "and save the result as a reflection memory for the next content generation run.",
-].join(" ")
-
-function isAnalyticsReflection(memory: MemoryHit) {
-  return memory.memory_type === "reflection"
-    && memory.metadata.source === "analytics-reflection-agent"
-}
-
-async function findLatestAnalyticsReflection() {
-  const memories = await searchMemories(REFLECTION_QUERY, 12)
-  return memories
-    .filter(isAnalyticsReflection)
-    .sort((left, right) => (
-      new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
-    ))[0] || null
-}
+import { getResearchMemories } from "@/api/research"
+import { getAgentTraces, type AgentTrace } from "@/api/traces"
 
 const card: CSSProperties = {
-  background: "rgba(255,255,255,0.5)",
-  border: "1.5px solid rgba(255,255,255,0.65)",
+  background: "rgba(255,255,255,0.58)",
+  border: "1.5px solid rgba(255,255,255,0.7)",
   borderRadius: 16,
-  padding: "20px",
-  backdropFilter: "blur(6px)",
+  padding: 20,
+  backdropFilter: "blur(8px)",
+}
+
+function formatTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const hours = Math.max(0, Math.round((Date.now() - date.getTime()) / 3_600_000))
+  return new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(-hours, "hour")
+}
+
+function readable(value: string) {
+  return value.replace(/[_-]/g, " ").replace(/\b\w/g, (letter: string) => letter.toUpperCase())
+}
+
+function analyticsGroups(memory: MemoryHit | null): GroupPerformance[] {
+  const value = memory?.metadata.aggregates
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is GroupPerformance => {
+    if (!item || typeof item !== "object") return false
+    const group = item as Partial<GroupPerformance>
+    return typeof group.group_name === "string"
+      && typeof group.total_likes === "number"
+      && typeof group.total_comments === "number"
+      && typeof group.total_clicks === "number"
+      && typeof group.average_engagement_per_post === "number"
+  })
 }
 
 export default function DashboardHome() {
   const navigate = useNavigate()
   const { company } = useOutletContext<{ company: CompanyProfile | null }>()
-  const [reflectionMemory, setReflectionMemory] = useState<MemoryHit | null>(null)
-  const [reflectionStatus, setReflectionStatus] = useState<"checking" | "missing" | "running" | "ready" | "error">("checking")
-  const [reflectionError, setReflectionError] = useState("")
-  const maxVal = Math.max(...WEEKLY_DATA)
+  const [traces, setTraces] = useState<AgentTrace[]>([])
+  const [research, setResearch] = useState<MemoryHit[]>([])
+  const [reflection, setReflection] = useState<MemoryHit | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isRunningAnalytics, setIsRunningAnalytics] = useState(false)
+  const [error, setError] = useState("")
 
-  useEffect(() => {
-    let active = true
-
-    void findLatestAnalyticsReflection()
-      .then((memory) => {
-        if (!active) return
-        setReflectionMemory(memory)
-        setReflectionStatus(memory ? "ready" : "missing")
-      })
-      .catch(() => {
-        if (active) setReflectionStatus("error")
-      })
-
-    return () => { active = false }
+  const loadDashboard = useCallback(async () => {
+    setIsLoading(true)
+    const [traceResult, researchResult, reflectionResult] = await Promise.allSettled([
+      getAgentTraces(50),
+      getResearchMemories(50),
+      getLatestAnalyticsReflection(),
+    ])
+    const failed: string[] = []
+    if (traceResult.status === "fulfilled") setTraces(traceResult.value)
+    else failed.push("agent activity")
+    if (researchResult.status === "fulfilled") setResearch(researchResult.value)
+    else failed.push("market research")
+    if (reflectionResult.status === "fulfilled") setReflection(reflectionResult.value)
+    else failed.push("analytics reflection")
+    setError(failed.length > 0 ? `Could not load ${failed.join(", ")}.` : "")
+    setIsLoading(false)
   }, [])
 
-  async function runAnalyticsReflection() {
-    setReflectionStatus("running")
-    setReflectionError("")
+  useEffect(() => {
+    void loadDashboard()
+  }, [loadDashboard])
 
+  async function handleRunAnalytics() {
+    if (isRunningAnalytics) return
+    setIsRunningAnalytics(true)
+    setError("")
     try {
-      await streamChat(ANALYTICS_PROMPT, {
-        onMemories: () => undefined,
-        onToken: () => undefined,
-      })
-      const memory = await findLatestAnalyticsReflection()
-      if (!memory) {
-        throw new Error("The analysis finished, but no reflection memory was found.")
-      }
-      setReflectionMemory(memory)
-      setReflectionStatus("ready")
-    } catch (requestError) {
-      setReflectionStatus("error")
-      setReflectionError(
-        requestError instanceof Error ? requestError.message : "Analytics could not be completed.",
-      )
+      await runAnalyticsReflection("theme")
+      setReflection(await getLatestAnalyticsReflection())
+      setTraces(await getAgentTraces(50))
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Analytics could not be completed.")
+    } finally {
+      setIsRunningAnalytics(false)
     }
   }
 
-  const reflectionStatusLabel = {
-    checking: "Checking reflection memory…",
-    missing: "Preview · not saved yet",
-    running: "Running Analytics Agent…",
-    ready: "✓ Saved as reflection memory",
-    error: "Reflection memory unavailable",
-  }[reflectionStatus]
+  const groups = useMemo(() => analyticsGroups(reflection), [reflection])
+  const bestGroup = typeof reflection?.metadata.best_group === "string" ? reflection.metadata.best_group : null
+  const successfulRuns = traces.filter((trace) => trace.success).length
+  const contentRuns = traces.filter((trace) => trace.agent_name === "content" && trace.success).length
+  const stats = [
+    { label: "Recent agent runs", value: traces.length, detail: `${successfulRuns} successful` },
+    { label: "Research memories", value: research.length, detail: "saved findings" },
+    { label: "Generated outputs", value: contentRuns, detail: "recent content runs" },
+    { label: "Analytics reflection", value: reflection ? "Ready" : "Not yet", detail: reflection ? "saved to memory" : "run analytics below" },
+  ]
 
-  return (
-    <div style={{ fontFamily: "'Oranienbaum', serif", display: "flex", flexDirection: "column", gap: 20 }}>
-
-      {/* Page title */}
+  return <section className="live-dashboard" aria-labelledby="dashboard-heading">
+    <header className="dashboard-page-heading">
       <div>
-        <h1 style={{ fontFamily: "'Playfair Display', serif", fontSize: 30, fontWeight: 700, color: "#0d2137", margin: "0 0 4px" }}>
-          Dashboard
-        </h1>
-        <p style={{ fontFamily: "'Oranienbaum', serif", fontSize: 16, color: "rgb(255,255,255)", margin: 0 }}>
-          Welcome back{company?.name ? `, ${company.name}` : ""} — here's your GrowthPilot workspace.
-        </p>
-        <span className="demo-data-badge">Demo dashboard data · AI Partner and Content use live APIs</span>
+        <p className="dashboard-kicker">LIVE COMPANY WORKSPACE</p>
+        <h1 id="dashboard-heading">Dashboard</h1>
+        <p className="dashboard-welcome">Welcome back{company?.name ? `, ${company.name}` : ""}. Every number below comes from your APIs.</p>
       </div>
+      <button type="button" className="secondary-action" onClick={() => void loadDashboard()} disabled={isLoading}>
+        {isLoading ? "Refreshing…" : "Refresh data"}
+      </button>
+    </header>
 
-      {/* ── Row 1: KPI stat tiles ── */}
-      <div className="dashboard-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
-        {KPI.map(k => (
-          <div key={k.label} style={{
-            ...card,
-            padding: "18px 22px",
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-          }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 12,
-              background: k.color + "1a",
-              border: `1.5px solid ${k.color}33`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-            }}>
-              <div style={{ width: 18, height: 18, borderRadius: 4, background: k.color }} />
-            </div>
-            <div>
-              <p style={{ margin: "0 0 2px", fontFamily: "'Oranienbaum', serif", fontSize: 15, color: "#4a7ab5" }}>{k.label}</p>
-              <p style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: 26, fontWeight: 700, color: "#0d2137", lineHeight: 1 }}>
-                {k.value} <span style={{ fontSize: 15, fontWeight: 400, color: "#8aa8c8" }}>{k.unit}</span>
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
+    {error && <div className="form-error" role="alert">{error}</div>}
 
-      {/* ── Row 2: News feed (left) + Growth chart & Tips (right) ── */}
-      <div className="dashboard-main-grid" style={{ display: "grid", gridTemplateColumns: "1fr 360px", gap: 16, alignItems: "start" }}>
-
-        {/* News feed */}
-        <div style={card}>
-          <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 16px" }}>
-            News Around the Business
-          </h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {NEWS.map((item, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  gap: 14,
-                  padding: "14px",
-                  borderRadius: 12,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  background: "rgba(74,122,181,0.04)",
-                  border: "1px solid rgba(74,122,181,0.08)",
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "rgba(74,122,181,0.1)"; e.currentTarget.style.transform = "translateX(3px)" }}
-                onMouseLeave={e => { e.currentTarget.style.background = "rgba(74,122,181,0.04)"; e.currentTarget.style.transform = "translateX(0)" }}
-              >
-                <img
-                  src={item.img}
-                  alt={item.tag}
-                  style={{ width: 50, height: 50, borderRadius: 10, objectFit: "cover", flexShrink: 0, backgroundColor: "#4a7ab5" }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", gap: 8, marginBottom: 5, alignItems: "center" }}>
-                    <span style={{
-                      fontSize: 15, fontWeight: 700, background: "rgba(74,122,181,0.15)",
-                      color: "#2d5a8e", borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap",
-                    }}>{item.tag}</span>
-                    <span style={{ fontSize: 15, color: "#8aa8c8" }}>{item.timestamp}</span>
-                  </div>
-                  <p style={{ margin: "0 0 3px", fontFamily: "'Oranienbaum', serif", fontWeight: 600, fontSize: 15, color: "#0d2137", lineHeight: 1.4 }}>{item.headline}</p>
-                  <p style={{ margin: 0, fontFamily: "'Oranienbaum', serif", fontSize: 15, color: "#2d5a8e", lineHeight: 1.4 }}>{item.summary}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right column: Growth chart + Tips */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-
-          {/* Weekly Growth Report */}
-          <div style={card}>
-            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 14px" }}>
-              Weekly Growth Report
-            </h3>
-
-            {/* Bar chart */}
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 72, marginBottom: 6 }}>
-              {WEEKLY_DATA.map((val, i) => (
-                <div key={i} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-                  <div style={{
-                    width: "100%",
-                    height: `${(val / maxVal) * 100}%`,
-                    background: i === WEEKLY_DATA.length - 1 ? "#4a7ab5" : "rgba(74,122,181,0.28)",
-                    borderRadius: "4px 4px 0 0",
-                  }} />
-                </div>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 5, marginBottom: 14 }}>
-              {WEEKS.map(w => (
-                <div key={w} style={{ flex: 1, textAlign: "center", fontSize: 15, color: "#8aa8c8", fontWeight: 600 }}>{w}</div>
-              ))}
-            </div>
-
-            {/* Metric row */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-              {[
-                { label: "Score", value: "74" },
-                { label: "Leads", value: "142" },
-                { label: "Posts", value: "38" },
-              ].map(m => (
-                <div key={m.label} style={{
-                  background: "rgba(74,122,181,0.1)",
-                  borderRadius: 8,
-                  padding: "8px 6px",
-                  textAlign: "center",
-                }}>
-                  <p style={{ margin: "0 0 2px", fontSize: 15, color: "#4a7ab5", fontWeight: 600 }}>{m.label}</p>
-                  <p style={{ margin: 0, fontFamily: "'Playfair Display', serif", fontSize: 20, fontWeight: 700, color: "#0d2137" }}>{m.value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Tips for Improvement */}
-          <div style={card}>
-            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 14px" }}>
-              Tips for Improvement
-            </h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {TIPS.map((tip, i) => (
-                <div
-                  key={i}
-                  style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}
-                  onClick={() => navigate("/dashboard/ai-partner")}
-                >
-                  <div style={{
-                    width: 22, height: 22, borderRadius: 6,
-                    background: "#4a7ab5", color: "#fff",
-                    fontSize: 12, fontWeight: 700,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    flexShrink: 0, marginTop: 1,
-                  }}>!</div>
-                  <div
-                    style={{
-                      flex: 1,
-                      background: "rgba(74,122,181,0.08)",
-                      borderRadius: 8,
-                      padding: "8px 12px",
-                      fontFamily: "'Oranienbaum', serif",
-                      fontSize: 15,
-                      color: "#1a3a5c",
-                      lineHeight: 1.45,
-                      transition: "background 0.2s",
-                    }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "rgba(74,122,181,0.16)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "rgba(74,122,181,0.08)")}
-                  >
-                    {tip}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Row 3: Analytics & Reflection ── */}
-      <div style={card}>
-        <div className="analytics-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
-          <div>
-            <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 3px" }}>
-              Analytics & Reflection
-            </h3>
-            <p style={{ margin: 0, fontFamily: "'Oranienbaum', serif", fontSize: 15, color: "rgb(24,25,26)" }}>
-              Simulated demo data
-            </p>
-          </div>
-          <div className="analytics-status-actions">
-            <span className={`reflection-status reflection-status-${reflectionStatus}`}>
-              {reflectionStatusLabel}
-            </span>
-            {reflectionStatus !== "checking" && (
-              <button
-                type="button"
-                className="analytics-run-button"
-                disabled={reflectionStatus === "running"}
-                onClick={() => void runAnalyticsReflection()}
-              >
-                {reflectionStatus === "ready" ? "Refresh analysis" : "Run analytics"}
-              </button>
-            )}
-          </div>
-        </div>
-
-        {reflectionError && <div className="form-error analytics-error" role="alert">{reflectionError}</div>}
-
-        <div className="analytics-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-
-          {/* Topic comparison */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "#4a7ab5", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Content performance
-            </p>
-            {ANALYTICS_TOPICS.map((row, i) => (
-              <div key={i} style={{
-                background: i === 0 ? "rgba(74,122,181,0.1)" : "rgba(74,122,181,0.04)",
-                border: i === 0 ? "1.5px solid rgba(74,122,181,0.22)" : "1px solid rgba(74,122,181,0.1)",
-                borderRadius: 10,
-                padding: "12px 14px",
-              }}>
-                <p style={{ margin: "0 0 6px", fontFamily: "'Playfair Display', serif", fontSize: 15, fontWeight: 700, color: "#0d2137" }}>
-                  {row.topic}
-                </p>
-                <p style={{ margin: "0 0 3px", fontFamily: "'Oranienbaum', serif", fontSize: 15, color: "#4a7ab5" }}>
-                  {row.likes} likes · {row.comments} comments · {row.clicks} clicks
-                </p>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 6 }}>
-                  <span style={{ fontFamily: "'Oranienbaum', serif", fontSize: 15, color: "#2d5a8e", fontWeight: 600 }}>
-                    Avg engagement/post
-                  </span>
-                  <span style={{
-                    fontFamily: "'Playfair Display', serif",
-                    fontSize: 18, fontWeight: 700,
-                    color: i === 0 ? "#2d8a4e" : "#0d2137",
-                  }}>{row.avg}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Insight + Reflection */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "#4a7ab5", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Insight & Reflection
-            </p>
-            <div style={{
-              background: "rgba(34,197,94,0.08)",
-              border: "1.5px solid rgba(34,197,94,0.22)",
-              borderRadius: 10,
-              padding: "12px 14px",
-            }}>
-              <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "#166534", textTransform: "uppercase", letterSpacing: "0.05em" }}>Insight</p>
-              <p style={{ margin: 0, fontFamily: "'Oranienbaum', serif", fontSize: 15, color: "#166534", lineHeight: 1.5 }}>
-                Engineering workflow content generated <strong>2.8×</strong> more engagement per post.
-              </p>
-            </div>
-            <div style={{
-              background: "rgba(74,122,181,0.06)",
-              border: "1px solid rgba(74,122,181,0.14)",
-              borderRadius: 10,
-              padding: "12px 14px",
-              flex: 1,
-            }}>
-              <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "#2d5a8e", textTransform: "uppercase", letterSpacing: "0.05em" }}>Reflection</p>
-              <p style={{ margin: 0, fontFamily: "'Oranienbaum', serif", fontSize: 15, color: "#1a3a5c", lineHeight: 1.5 }}>
-                {reflectionMemory?.content || "Posts addressing concrete workflow friction appeared more relevant than general AI automation lists. This is a hypothesis based on simulated performance data."}
-              </p>
-            </div>
-          </div>
-
-          {/* Next experiment + CTA */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 15, fontWeight: 700, color: "#4a7ab5", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Next Steps
-            </p>
-            <div style={{
-              background: "rgba(74,122,181,0.06)",
-              border: "1px solid rgba(74,122,181,0.14)",
-              borderRadius: 10,
-              padding: "12px 14px",
-              flex: 1,
-            }}>
-              <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "#2d5a8e", textTransform: "uppercase", letterSpacing: "0.05em" }}>Next Experiment</p>
-              <p style={{ margin: 0, fontFamily: "'Oranienbaum', serif", fontSize: 15, color: "#1a3a5c", lineHeight: 1.5 }}>
-                Test another workflow-focused post with a different opening hook to validate the 2.8× finding.
-              </p>
-            </div>
-            <button
-              onClick={() => navigate("/dashboard/content", {
-                state: {
-                  prompt: "Create a LinkedIn post that applies our latest analytics reflection and tests a different opening hook.",
-                },
-              })}
-              style={{
-                width: "100%",
-                background: "#0d2137",
-                border: "none",
-                color: "#fff",
-                borderRadius: 10,
-                padding: "13px 16px",
-                fontFamily: "'Oranienbaum', serif",
-                fontWeight: 600,
-                fontSize: 15,
-                cursor: "pointer",
-                transition: "background 0.2s",
-                textAlign: "center",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = "#1a3a5c")}
-              onMouseLeave={e => (e.currentTarget.style.background = "#0d2137")}
-            >
-              Use this insight for the next LinkedIn post →
-            </button>
-          </div>
-        </div>
-      </div>
-
+    <div className="dashboard-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 14 }}>
+      {stats.map((stat) => <article className="live-stat" key={stat.label} style={card}>
+        <span>{stat.label}</span>
+        <strong>{stat.value}</strong>
+        <small>{stat.detail}</small>
+      </article>)}
     </div>
-  )
+
+    <div className="dashboard-main-grid" style={{ display: "grid", gridTemplateColumns: "1.1fr .9fr", gap: 16 }}>
+      <article style={card}>
+        <div className="card-heading-row">
+          <div><p className="dashboard-kicker">T20 TRACE OUTPUT</p><h2>Recent Agent Activity</h2></div>
+          <button type="button" className="text-action" onClick={() => navigate("/dashboard/activity")}>View all →</button>
+        </div>
+        {traces.length === 0 ? <div className="inline-empty">No agent runs recorded yet.</div> : <div className="activity-preview-list">
+          {traces.slice(0, 5).map((trace) => <div key={trace.id}>
+            <span className={`trace-dot trace-dot-${trace.success ? "success" : "failure"}`} />
+            <div><strong>{readable(trace.agent_name)}</strong><small>{trace.memories_retrieved.length} memories · {Math.round(trace.duration_ms)} ms</small></div>
+            <time>{formatTime(trace.created_at)}</time>
+          </div>)}
+        </div>}
+      </article>
+
+      <article style={card}>
+        <div className="card-heading-row">
+          <div><p className="dashboard-kicker">MARKET RESEARCH MEMORY</p><h2>Latest Findings</h2></div>
+          <button type="button" className="text-action" onClick={() => navigate("/dashboard/market")}>Open research →</button>
+        </div>
+        {research.length === 0 ? <div className="inline-empty">No saved research yet. Run the Market Research Agent to populate this area.</div> : <div className="research-preview-list">
+          {research.slice(0, 4).map((memory) => <div key={memory.id}>
+            <span>{typeof memory.metadata.category === "string" ? readable(memory.metadata.category) : "Research"}</span>
+            <p>{memory.content}</p>
+          </div>)}
+        </div>}
+      </article>
+    </div>
+
+    <article style={card}>
+      <div className="card-heading-row analytics-live-heading">
+        <div><p className="dashboard-kicker">T21 ANALYTICS & REFLECTION</p><h2>Campaign performance → reusable memory</h2></div>
+        <div className="analytics-status-actions">
+          <span className={`reflection-status reflection-status-${reflection ? "ready" : "missing"}`}>
+            {reflection ? "✓ Saved as reflection memory" : "No reflection saved"}
+          </span>
+          <button type="button" className="analytics-run-button" disabled={isRunningAnalytics} onClick={() => void handleRunAnalytics()}>
+            {isRunningAnalytics ? "Analyzing…" : reflection ? "Refresh analysis" : "Run analytics"}
+          </button>
+        </div>
+      </div>
+
+      {!reflection ? <div className="analytics-empty">
+        <strong>No analytics output yet.</strong>
+        <span>The agent requires at least two valid simulated, published LinkedIn performance memories across two themes.</span>
+      </div> : <div className="analytics-live-grid">
+        <div>
+          <h3>Measured groups</h3>
+          {groups.length === 0 ? <div className="inline-empty">This saved reflection predates structured aggregate metadata. Refresh analysis to generate measured groups.</div> : groups.map((group) => <div className={`analytics-group ${group.group_name === bestGroup ? "analytics-group-best" : ""}`} key={group.group_name}>
+            <div><strong>{readable(group.group_name)}</strong>{group.group_name === bestGroup && <span>Best</span>}</div>
+            <p>{group.total_likes} likes · {group.total_comments} comments · {group.total_clicks} clicks</p>
+            <small>Average engagement/post: {group.average_engagement_per_post}</small>
+          </div>)}
+        </div>
+        <div className="reflection-output">
+          <h3>Saved reflection</h3>
+          <p>{reflection.content}</p>
+          <small>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(reflection.created_at))}</small>
+        </div>
+        <div className="analytics-next-action">
+          <h3>Close the loop</h3>
+          <p>Generate the next post with this reflection in the Content Agent’s retrieved memory context.</p>
+          <button type="button" onClick={() => navigate("/dashboard/content", { state: { prompt: "Create a LinkedIn post using our latest campaign reflection. Test a different opening hook and keep the recommendation grounded in that reflection." } })}>
+            Use reflection in Content →
+          </button>
+        </div>
+      </div>}
+    </article>
+  </section>
 }
