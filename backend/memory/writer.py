@@ -30,7 +30,14 @@ class MemoryWriter:
         self.repository = repository
         self.extraction_policy = extraction_policy
 
-    async def write(self, company_id, text: str):
+    async def write(
+        self,
+        company_id,
+        text: str,
+        memory_type: str = "semantic",
+        metadata: dict | None = None,
+        importance: float = 0.5,
+    ):
         """
         Convert text into stored memories.
         """
