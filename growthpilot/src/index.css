@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Orienta&family=Old+Standard+TT:wght@400;700&family=Pathway+Gothic+One&family=Oranienbaum&family=Overlock:wght@400;700&family=Pattaya&family=Playfair+Display+SC:wght@400;700&family=M+PLUS+1p:wght@700&family=Lobster&family=Lobster+Two:ital,wght@0,400;0,700;1,400;1,700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #b8d4f0;
+  --color-bg-dark: #0d2137;
+  --color-navy: #0d2137;
+  --color-navy-mid: #1a3a5c;
+  --color-blue-mid: #2d5a8e;
+  --color-blue-card: #4a7ab5;
+  --color-blue-light: #8ab4d8;
+  --color-blue-pale: #d4e8f8;
+  --color-white: #ffffff;
+
+  --font-display: 'Playfair Display', serif;
+  --font-body: 'Oranienbaum', serif;
+
+  --radius-card: 16px;
+  --radius-btn: 8px;
+}
+
+:root {
+  --background: #b8d4f0;
+  --foreground: #0d2137;
+  --card: #4a7ab5;
+  --card-foreground: #ffffff;
+  --primary: #0d2137;
+  --primary-foreground: #ffffff;
+  --secondary: #8ab4d8;
+  --secondary-foreground: #0d2137;
+  --muted: #9ac0e8;
+  --muted-foreground: #2d5a8e;
+  --accent: #4a7ab5;
+  --accent-foreground: #ffffff;
+  --border: rgba(45, 90, 142, 0.2);
+  --ring: #4a7ab5;
+  --radius: 16px;
+}
+
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Oranienbaum', serif;
+  background-color: #b8d4f0;
+  color: #0d2137;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide scrollbar by default, show on hover/scroll */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(45, 90, 142, 0.3);
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+*:hover::-webkit-scrollbar-thumb {
+  opacity: 1;
+}
