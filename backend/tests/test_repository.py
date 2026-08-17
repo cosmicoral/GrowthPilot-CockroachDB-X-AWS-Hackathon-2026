@@ -391,8 +391,10 @@ async def test_save_memories_batch_semantic_merge_keeps_higher_importance(
                 return None
 
             if "UPDATE memories" in query:
-                captured_args["metadata"] = args[1]
-                captured_args["importance"] = args[2]
+                captured_args["company_id"] = args[0]
+                captured_args["memory_id"] = args[1]
+                captured_args["metadata"] = args[2]
+                captured_args["importance"] = args[3]
 
                 return existing_id
 
@@ -448,6 +450,7 @@ async def test_save_memories_batch_semantic_merge_keeps_higher_importance(
         "embedding": create_test_embedding()
     }])
 
+    assert captured_args["company_id"] == "company-1"
 
     assert result == [existing_id]
 
@@ -1256,7 +1259,10 @@ async def test_merge_memory(monkeypatch):
 
     repository = MemoryRepository()
 
+    company_id = uuid4()
+
     result = await repository.merge_memory(
+        company_id,
         memory_id,
         {"source": "agent"},
         0.9
