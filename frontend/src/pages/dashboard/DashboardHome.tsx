@@ -1,6 +1,9 @@
 import { useNavigate, useOutletContext } from "react-router-dom"
+import { useEffect, useState } from "react"
 import type { CSSProperties } from "react"
 import type { CompanyProfile } from "@/api/auth"
+import { searchMemories, streamChat } from "@/api/chat"
+import type { MemoryHit } from "@/api/chat"
 
 const NEWS = [
   {
@@ -53,6 +56,27 @@ const ANALYTICS_TOPICS = [
   { topic: "AI automation", likes: 44, comments: 8, clicks: 18, avg: 35 },
 ]
 
+const REFLECTION_QUERY = "LinkedIn campaign performance engineering workflows AI automation reflection"
+const ANALYTICS_PROMPT = [
+  "Run the Analytics & Reflection Agent on our simulated LinkedIn campaign performance.",
+  "Compare results by theme, produce a concise hypothesis and next experiment,",
+  "and save the result as a reflection memory for the next content generation run.",
+].join(" ")
+
+function isAnalyticsReflection(memory: MemoryHit) {
+  return memory.memory_type === "reflection"
+    && memory.metadata.source === "analytics-reflection-agent"
+}
+
+async function findLatestAnalyticsReflection() {
+  const memories = await searchMemories(REFLECTION_QUERY, 12)
+  return memories
+    .filter(isAnalyticsReflection)
+    .sort((left, right) => (
+      new Date(right.created_at).getTime() - new Date(left.created_at).getTime()
+    ))[0] || null
+}
+
 const card: CSSProperties = {
   background: "rgba(255,255,255,0.5)",
   border: "1.5px solid rgba(255,255,255,0.65)",
@@ -64,7 +88,57 @@ const card: CSSProperties = {
 export default function DashboardHome() {
   const navigate = useNavigate()
   const { company } = useOutletContext<{ company: CompanyProfile | null }>()
+  const [reflectionMemory, setReflectionMemory] = useState<MemoryHit | null>(null)
+  const [reflectionStatus, setReflectionStatus] = useState<"checking" | "missing" | "running" | "ready" | "error">("checking")
+  const [reflectionError, setReflectionError] = useState("")
   const maxVal = Math.max(...WEEKLY_DATA)
+
+  useEffect(() => {
+    let active = true
+
+    void findLatestAnalyticsReflection()
+      .then((memory) => {
+        if (!active) return
+        setReflectionMemory(memory)
+        setReflectionStatus(memory ? "ready" : "missing")
+      })
+      .catch(() => {
+        if (active) setReflectionStatus("error")
+      })
+
+    return () => { active = false }
+  }, [])
+
+  async function runAnalyticsReflection() {
+    setReflectionStatus("running")
+    setReflectionError("")
+
+    try {
+      await streamChat(ANALYTICS_PROMPT, {
+        onMemories: () => undefined,
+        onToken: () => undefined,
+      })
+      const memory = await findLatestAnalyticsReflection()
+      if (!memory) {
+        throw new Error("The analysis finished, but no reflection memory was found.")
+      }
+      setReflectionMemory(memory)
+      setReflectionStatus("ready")
+    } catch (requestError) {
+      setReflectionStatus("error")
+      setReflectionError(
+        requestError instanceof Error ? requestError.message : "Analytics could not be completed.",
+      )
+    }
+  }
+
+  const reflectionStatusLabel = {
+    checking: "Checking reflection memory…",
+    missing: "Preview · not saved yet",
+    running: "Running Analytics Agent…",
+    ready: "✓ Saved as reflection memory",
+    error: "Reflection memory unavailable",
+  }[reflectionStatus]
 
   return (
     <div style={{ fontFamily: "'Oranienbaum', serif", display: "flex", flexDirection: "column", gap: 20 }}>
@@ -248,7 +322,7 @@ export default function DashboardHome() {
 
       {/* ── Row 3: Analytics & Reflection ── */}
       <div style={card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
+        <div className="analytics-heading" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
           <div>
             <h3 style={{ fontFamily: "'Playfair Display', serif", fontSize: 17, fontWeight: 700, color: "#0d2137", margin: "0 0 3px" }}>
               Analytics & Reflection
@@ -257,18 +331,24 @@ export default function DashboardHome() {
               Simulated demo data
             </p>
           </div>
-          <span style={{
-            fontFamily: "'Oranienbaum', serif",
-            fontSize: 11, fontWeight: 700,
-            color: "#6d28d9",
-            background: "rgba(109,40,217,0.1)",
-            border: "1px solid rgba(109,40,217,0.22)",
-            borderRadius: 12,
-            padding: "4px 10px",
-          }}>
-            ✓ Saved as reflection memory
-          </span>
+          <div className="analytics-status-actions">
+            <span className={`reflection-status reflection-status-${reflectionStatus}`}>
+              {reflectionStatusLabel}
+            </span>
+            {reflectionStatus !== "checking" && (
+              <button
+                type="button"
+                className="analytics-run-button"
+                disabled={reflectionStatus === "running"}
+                onClick={() => void runAnalyticsReflection()}
+              >
+                {reflectionStatus === "ready" ? "Refresh analysis" : "Run analytics"}
+              </button>
+            )}
+          </div>
         </div>
+
+        {reflectionError && <div className="form-error analytics-error" role="alert">{reflectionError}</div>}
 
         <div className="analytics-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
 
@@ -329,7 +409,7 @@ export default function DashboardHome() {
             }}>
               <p style={{ margin: "0 0 4px", fontSize: 15, fontWeight: 700, color: "#2d5a8e", textTransform: "uppercase", letterSpacing: "0.05em" }}>Reflection</p>
               <p style={{ margin: 0, fontFamily: "'Oranienbaum', serif", fontSize: 15, color: "#1a3a5c", lineHeight: 1.5 }}>
-                Posts addressing concrete workflow friction appeared more relevant than general AI automation lists. Hypothesis based on simulated data.
+                {reflectionMemory?.content || "Posts addressing concrete workflow friction appeared more relevant than general AI automation lists. This is a hypothesis based on simulated performance data."}
               </p>
             </div>
           </div>
@@ -352,7 +432,11 @@ export default function DashboardHome() {
               </p>
             </div>
             <button
-              onClick={() => navigate("/dashboard/content")}
+              onClick={() => navigate("/dashboard/content", {
+                state: {
+                  prompt: "Create a LinkedIn post that applies our latest analytics reflection and tests a different opening hook.",
+                },
+              })}
               style={{
                 width: "100%",
                 background: "#0d2137",

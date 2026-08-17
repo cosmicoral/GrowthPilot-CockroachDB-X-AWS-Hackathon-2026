@@ -1,9 +1,12 @@
 import { useState } from "react"
+import { useLocation } from "react-router-dom"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { generateContent } from "@/api/chat"
+import type { MemoryHit } from "@/api/chat"
+import MemoryInspector from "@/components/MemoryInspector"
 
 const CONTENT_TABS = ["LinkedIn Post", "X Thread", "Email Campaign", "Landing Page Copy"]
 
@@ -134,10 +137,15 @@ TESTIMONIALS:
 }
 
 export default function ContentCreation() {
+  const location = useLocation()
+  const navigationPrompt = (location.state as { prompt?: unknown } | null)?.prompt
   const [activeTab, setActiveTab] = useState("LinkedIn Post")
   const [copied, setCopied] = useState(false)
-  const [prompt, setPrompt] = useState("")
+  const [prompt, setPrompt] = useState(
+    typeof navigationPrompt === "string" ? navigationPrompt : "",
+  )
   const [contentByTab, setContentByTab] = useState(CONTENT_SAMPLES)
+  const [memoriesByTab, setMemoriesByTab] = useState<Record<string, MemoryHit[]>>({})
   const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState("")
 
@@ -154,6 +162,7 @@ export default function ContentCreation() {
       const request = prompt.trim() || `Create a ${activeTab} using the company's saved strategy, audience, and previous campaign memories.`
       const result = await generateContent(request)
       setContentByTab((current) => ({ ...current, [activeTab]: result.content }))
+      setMemoriesByTab((current) => ({ ...current, [activeTab]: result.memories }))
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Content generation failed.")
     } finally {
@@ -196,8 +205,12 @@ export default function ContentCreation() {
           ))}
         </TabsList>
 
-        {CONTENT_TABS.map(tab => (
-          <TabsContent key={tab} value={tab}>
+        {CONTENT_TABS.map(tab => {
+          const reflectionMemories = (memoriesByTab[tab] || []).filter(
+            (memory) => memory.memory_type === "reflection",
+          )
+
+          return <TabsContent key={tab} value={tab}>
             {/* Content card */}
             <div style={{
               background: "rgba(255,255,255,0.5)",
@@ -253,9 +266,16 @@ export default function ContentCreation() {
 
               {tab === "LinkedIn Post" && (
                 <div style={{ marginBottom: 14 }}>
-                  <Badge variant="memoryTag">
-                    🧠 Generated with saved company context
-                  </Badge>
+                  {reflectionMemories.length > 0 ? (
+                    <MemoryInspector
+                      memories={reflectionMemories}
+                      label={`Based on ${reflectionMemories.length} reflection ${reflectionMemories.length === 1 ? "memory" : "memories"}`}
+                    />
+                  ) : (
+                    <Badge variant="memoryTag">
+                      🧠 Generate to see the memories actually used
+                    </Badge>
+                  )}
                 </div>
               )}
 
@@ -266,7 +286,7 @@ export default function ContentCreation() {
               />
             </div>
           </TabsContent>
-        ))}
+        })}
       </Tabs>
     </div>
   )

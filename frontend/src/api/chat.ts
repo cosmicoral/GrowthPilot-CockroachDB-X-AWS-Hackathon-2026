@@ -87,7 +87,7 @@ export async function streamChat(message: string, handlers: StreamHandlers) {
 }
 
 export function generateContent(prompt: string) {
-  return apiRequest<{ content: string }>("/api/chat/generate-content", {
+  return apiRequest<{ content: string; memories: MemoryHit[] }>("/api/chat/generate-content", {
     method: "POST",
     body: JSON.stringify({ prompt }),
   })

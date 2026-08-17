@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import Logo from "@/components/Logo"
+import MemoryInspector from "@/components/MemoryInspector"
 import { streamChat, type MemoryHit, type PlannerMetadata } from "@/api/chat"
 
 interface Message {
@@ -17,45 +18,6 @@ const QUICK_SUGGESTIONS = [
   "Write me a cold email opener",
   "What should I post about this week?",
 ]
-
-function relativeTime(value: string) {
-  const timestamp = new Date(value).getTime()
-  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
-  if (seconds < 60) return "just now"
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
-  return `${Math.floor(seconds / 86400)}d ago`
-}
-
-function MemoryInspector({ memories }: { memories: MemoryHit[] }) {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <div className="memory-inspector">
-      <button type="button" className="memory-toggle" onClick={() => setOpen((current) => !current)}>
-        🧠 Answered using {memories.length} {memories.length === 1 ? "memory" : "memories"} from your history
-        <span>{open ? "−" : "+"}</span>
-      </button>
-      {open && <div className="memory-list">
-        {memories.map((memory) => {
-          const similarity = memory.similarity == null ? null : Math.max(0, Math.min(1, memory.similarity))
-          return <article className="memory-hit" key={memory.id}>
-            <div className="memory-hit-header">
-              <span className={`memory-type memory-type-${memory.memory_type}`}>{memory.memory_type}</span>
-              <span>{relativeTime(memory.created_at)}</span>
-            </div>
-            <p>{memory.content}</p>
-            <div className="memory-metrics">
-              <span>Similarity {similarity == null ? "n/a" : `${Math.round(similarity * 100)}%`}</span>
-              <span>Importance {Math.round(memory.importance * 100)}%</span>
-            </div>
-            {similarity != null && <div className="memory-score"><span style={{ width: `${similarity * 100}%` }} /></div>}
-          </article>
-        })}
-      </div>}
-    </div>
-  )
-}
 
 export default function AIPartner() {
   const [messages, setMessages] = useState<Message[]>([

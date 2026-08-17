@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
@@ -10,6 +11,7 @@ from backend.agents.base import AgentResult
 from backend.agents.planner import PlannerDecision, PlannerOutput
 from backend.api.chat import router as chat_router
 from backend.api.deps import get_current_company_id
+from backend.memory.store import MemoryHit
 
 app = FastAPI()
 app.include_router(chat_router)
@@ -169,6 +171,19 @@ def test_generate_content_success(
         success=True,
         output="Generated post",
     )
+    reflection_id = uuid4()
+    mock_agent.retrieved_memories = [
+        MemoryHit(
+            id=reflection_id,
+            company_id=company_id,
+            content="Workflow posts performed best.",
+            memory_type="reflection",
+            metadata={"source": "analytics-reflection-agent"},
+            importance=0.9,
+            similarity=0.94,
+            created_at=datetime(2026, 8, 17, tzinfo=timezone.utc),
+        )
+    ]
     mock_agent_class.return_value = mock_agent
 
     response = client.post(
@@ -177,7 +192,14 @@ def test_generate_content_success(
     )
 
     assert response.status_code == status.HTTP_200_OK
-    assert response.json() == {"content": "Generated post"}
+    payload = response.json()
+    assert payload["content"] == "Generated post"
+    assert len(payload["memories"]) == 1
+    assert payload["memories"][0]["id"] == str(reflection_id)
+    assert payload["memories"][0]["memory_type"] == "reflection"
+    assert payload["memories"][0]["metadata"] == {
+        "source": "analytics-reflection-agent",
+    }
 
     mock_agent.run.assert_awaited_once_with(
         prompt="test prompt",

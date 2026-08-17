@@ -283,6 +283,12 @@ async def generate_content(
             ),
         )
 
+    memories_used = getattr(agent, "retrieved_memories", [])
+
     return {
         "content": result.output,
+        "memories": [
+            memory.model_dump(mode="json")
+            for memory in memories_used
+        ],
     }

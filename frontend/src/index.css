@@ -135,6 +135,13 @@ button:disabled { cursor: not-allowed !important; opacity: 0.6; }
 .content-prompt-card > div:not(.form-error) { display: flex; gap: 10px; }
 .content-prompt-card input { flex: 1; }
 .content-prompt-card button { min-height: 42px; }
+.analytics-status-actions { display: flex; align-items: center; gap: 8px; }
+.reflection-status { padding: 4px 10px; border: 1px solid rgba(109,40,217,.22); border-radius: 99px; background: rgba(109,40,217,.1); color: #6d28d9; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.reflection-status-missing, .reflection-status-checking { border-color: rgba(146,64,14,.2); background: rgba(251,191,36,.12); color: #92400e; }
+.reflection-status-error { border-color: rgba(185,28,28,.2); background: rgba(254,226,226,.72); color: #991b1b; }
+.analytics-run-button { min-height: 30px; padding: 0 11px; border: 1px solid rgba(74,122,181,.25); border-radius: 8px; background: rgba(255,255,255,.62); color: #2d5a8e; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.analytics-run-button:disabled { cursor: wait; opacity: .65; }
+.analytics-error { margin: -8px 0 14px; }
 
 .research-page, .growthgraph-page { width: min(1180px, 100%); margin: 0 auto; }
 .research-run-card, .research-section, .growthgraph-hero, .growthgraph-query, .growthgraph-results, .growthgraph-empty {
@@ -222,6 +229,7 @@ button:disabled { cursor: not-allowed !important; opacity: 0.6; }
   .chat-composer { flex-direction: column; }
   .chat-composer button { min-height: 46px; }
   .content-prompt-card > div:not(.form-error), .onboarding-actions { align-items: stretch; flex-direction: column; }
+  .analytics-heading, .analytics-status-actions { align-items: stretch !important; flex-direction: column; }
   .onboarding-actions > :last-child { margin-left: 0; }
   .onboarding-card { padding: 24px 18px; }
   .onboarding-fields { min-height: 260px; }

@@ -10,7 +10,7 @@ const TabsList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
-    className={cn("flex gap-[6px]", className)}
+    className={cn("flex w-full max-w-full gap-[6px] overflow-x-auto pb-[4px]", className)}
     {...props}
   />
 ))
@@ -26,7 +26,7 @@ const TabsTrigger = React.forwardRef<
     className={cn(
       // Inactive state
       "font-[family-name:'Oranienbaum',serif] text-[17px] font-medium",
-      "px-[18px] py-[8px] rounded-[8px] cursor-pointer transition-all duration-200",
+      "shrink-0 px-[18px] py-[8px] rounded-[8px] cursor-pointer transition-all duration-200",
       "bg-[rgba(255,255,255,0.45)] border-[1.5px] border-[rgba(255,255,255,0.6)] text-[#2d5a8e]",
       "hover:bg-[rgba(255,255,255,0.65)]",
       // Active state — matches: background: "#0d2137", color: "#fff", fontWeight: 700
