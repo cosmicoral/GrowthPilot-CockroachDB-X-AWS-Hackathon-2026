@@ -23,7 +23,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
 
-
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
@@ -33,7 +32,6 @@ from backend.memory.embedding import BedrockEmbeddingService  # noqa: E402
 from backend.memory.hash import create_content_hash  # noqa: E402
 from backend.memory.repository import MemoryRepository  # noqa: E402
 from scripts.mosaic_ranking_data import EVAL_MEMORIES  # noqa: E402
-
 
 COMPANY_ID = UUID("8c760052-7ba2-4caa-b382-42d57cc44579")
 COMPANY_NAME = "Mosaic Kitchen — Ranking Evaluation"
@@ -169,12 +167,13 @@ async def seed_memories() -> None:
                 """
                 UPDATE memories
                 SET
-                    memory_type = $2,
-                    metadata = $3,
-                    importance = $4,
-                    created_at = $5
-                WHERE id = $1
+                    memory_type = $3,
+                    metadata = $4,
+                    importance = $5,
+                    created_at = $6
+                WHERE company_id = $1 AND id = $2
                 """,
+                COMPANY_ID,
                 memory_id,
                 memory["memory_type"],
                 {

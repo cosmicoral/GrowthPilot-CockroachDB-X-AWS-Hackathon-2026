@@ -344,12 +344,13 @@ async def seed_memories() -> None:
                 """
                 UPDATE memories
                 SET
-                    memory_type = $2,
-                    metadata = $3,
-                    importance = $4,
-                    created_at = $5
-                WHERE id = $1
+                    memory_type = $3,
+                    metadata = $4,
+                    importance = $5,
+                    created_at = $6
+                WHERE company_id = $1 AND id = $2
                 """,
+                COMPANY_ID,
                 memory_id,
                 memory["memory_type"],
                 {
