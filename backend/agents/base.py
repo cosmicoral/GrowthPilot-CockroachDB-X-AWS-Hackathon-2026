@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi.encoders import jsonable_encoder
-
 from pydantic import BaseModel, Field
 
 from backend.agents.context import AgentContext
