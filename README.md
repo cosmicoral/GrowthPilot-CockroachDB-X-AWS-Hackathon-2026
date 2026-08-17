@@ -363,11 +363,13 @@ GrowthPilot was built collaboratively for the CockroachDB × AWS AI Agent
 Hackathon 2026, spanning memory architecture, agent orchestration, frontend,
 API design, testing, and deployment.
 
-- [Larry Margerum](https://github.com/larrymargerum01)
-- [Coral](https://github.com/cosmicoral)
-- [M Muneeb Hussain](https://github.com/muneeb0065)
-- [Gagandeep Singh](https://github.com/gagan615)
+**Contributors (alphabetical order):**
+
 - [Amaan](https://github.com/amaanofc)
+- [Coral](https://github.com/cosmicoral)
+- [Gagandeep Singh](https://github.com/gagan615)
+- [Larry Margerum](https://github.com/larrymargerum01)
+- [M Muneeb Hussain](https://github.com/muneeb0065)
 
 ## License
 
