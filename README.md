@@ -331,6 +331,32 @@ docs/           Memory design and API contracts
   company IDs, memory IDs, founder names, or raw memory content.
 - `.env`, certificates, and cloud credentials must never be committed.
 
+## How we collaborated
+
+GrowthPilot was designed and built by a distributed team in a little over two
+weeks. We used a shared Trello board as the project control plane:
+
+**[View the GrowthPilot delivery board →](https://trello.com/b/HxZbXQSE)**
+
+- Work was split into numbered, reviewable tickets spanning infrastructure,
+  memory, agents, API contracts, frontend surfaces, testing, and deployment.
+- Every ticket had a clear owner, checklist, dependency notes, and visible
+  movement through **To-do**, **In progress**, **Blocked**, **Under review**,
+  and **Done**.
+- Cross-layer contracts—especially SSE events, memory provenance, reflection
+  output, and tenant isolation—were agreed in ticket and PR discussions before
+  the dependent work was merged.
+- Contributors developed on focused branches and used pull requests for code
+  review, automated tests, conflict resolution, and integration against the
+  latest `main`.
+- Blockers were made explicit rather than hidden. This let backend, frontend,
+  data, and deployment work continue in parallel while dependencies were being
+  resolved.
+
+That workflow helped us turn many independently owned components into one
+coherent demo loop while keeping the implementation and hackathon claims
+reviewable by the whole team.
+
 ## Team
 
 GrowthPilot was built collaboratively for the CockroachDB × AWS AI Agent
