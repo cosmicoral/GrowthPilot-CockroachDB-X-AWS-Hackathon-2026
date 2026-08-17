@@ -156,11 +156,11 @@ LIMIT 1
 MERGE_MEMORY_SQL = """
 UPDATE memories
 SET
-    metadata = $2,
-    importance = GREATEST(importance, $3),
+    metadata = $3,
+    importance = GREATEST(importance, $4),
     last_accessed_at = now(),
     access_count = access_count + 1
-WHERE id = $1
+WHERE company_id = $1 AND id = $2
 RETURNING id
 """
 
@@ -251,6 +251,7 @@ class MemoryRepository:
         self,
         connection: asyncpg.Connection,
         *,
+        company_id,
         memory_id,
         metadata,
         importance
@@ -261,6 +262,7 @@ class MemoryRepository:
 
         return await connection.fetchval(
             MERGE_MEMORY_SQL,
+            company_id,
             memory_id,
             metadata,
             importance
@@ -301,6 +303,7 @@ class MemoryRepository:
         ):
             return await self._merge_memory(
                 connection,
+                company_id = memory["company_id"],
                 memory_id = similar["id"],
                 metadata = memory["metadata"],
                 importance = memory["importance"]
@@ -467,7 +470,7 @@ class MemoryRepository:
             transaction
         )
 
-    async def get_memory(self, memory_id):
+    async def get_memory(self, company_id, memory_id):
         """
         Retrieve a memory by ID.
         """
@@ -482,12 +485,12 @@ class MemoryRepository:
             importance,
             embedding
         FROM memories
-        WHERE id = $1;
+        WHERE company_id = $1 AND id = $2;
         """
 
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchrow(query, memory_id)
+            return await connection.fetchrow(query, company_id, memory_id)
 
 
     async def get_by_content_hash(self, company_id, content_hash):
@@ -534,7 +537,7 @@ class MemoryRepository:
         return row
 
 
-    async def merge_memory(self, memory_id, metadata, importance):
+    async def merge_memory(self, company_id, memory_id, metadata, importance):
         """
         Merge new information into an existing memory.
         """
@@ -542,6 +545,7 @@ class MemoryRepository:
         async with database.pool.acquire() as connection:
             return await connection.fetchval(
                 MERGE_MEMORY_SQL,
+                company_id,
                 memory_id,
                 metadata,
                 importance
@@ -661,7 +665,7 @@ class MemoryRepository:
         ]
 
 
-    async def delete_memory(self, memory_id):
+    async def delete_memory(self, company_id, memory_id):
         """
         Delete a memory by ID.
 
@@ -670,13 +674,13 @@ class MemoryRepository:
 
         query = """
         DELETE FROM memories
-        WHERE id = $1
+        WHERE company_id = $1 AND id = $2
         RETURNING id;
         """
 
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(query, memory_id)
+            return await connection.fetchval(query, company_id, memory_id)
 
 
     async def count_memories(self, company_id):
@@ -695,7 +699,7 @@ class MemoryRepository:
             return await connection.fetchval(query, company_id)
 
 
-    async def touch_memory(self, memory_id):
+    async def touch_memory(self, company_id, memory_id):
         """
         Update access metadata.
 
@@ -707,15 +711,15 @@ class MemoryRepository:
         SET
             last_accessed_at = now(),
             access_count = access_count + 1
-        WHERE id = $1
+        WHERE company_id = $1 AND id = $2
         RETURNING id;
         """
 
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(query, memory_id)
+            return await connection.fetchval(query, company_id, memory_id)
 
-    async def update_importance(self, memory_id, importance: float):
+    async def update_importance(self, company_id, memory_id, importance: float):
         """
         Update memory importance score.
         """
@@ -726,14 +730,14 @@ class MemoryRepository:
 
         query = """
         UPDATE memories
-        SET importance = $2
-        WHERE id = $1
+        SET importance = $3
+        WHERE company_id = $1 AND id = $2
         RETURNING id;
         """
 
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(query, memory_id, importance)
+            return await connection.fetchval(query, company_id, memory_id, importance)
 
 
     async def list_by_type(
