@@ -1,633 +1,342 @@
 <div align="center">
 
-# 🤖 GrowthPilot
+# GrowthPilot
 
-### Autonomous AI GTM Engineer with Persistent Memory
+### A memory-first AI go-to-market teammate for early-stage founders
 
-**Plan. Execute. Learn. Remember. Grow.**
+**Research → create → measure → reflect → remember → improve**
 
-Built for the CockroachDB AI Agent Hackathon 2026
+Built for the **CockroachDB × AWS AI Agent Hackathon 2026**
 
-![Python](https://img.shields.io/badge/Python-FastAPI-blue)
-![AI](https://img.shields.io/badge/AI-Agent-green)
-![Database](https://img.shields.io/badge/Database-CockroachDB-red)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB)
+![FastAPI](https://img.shields.io/badge/API-FastAPI-009688)
+![React](https://img.shields.io/badge/Frontend-React%20%2B%20TypeScript-61DAFB)
+![CockroachDB](https://img.shields.io/badge/Memory-CockroachDB-6933FF)
+![AWS Bedrock](https://img.shields.io/badge/AI-AWS%20Bedrock-FF9900)
 
 </div>
 
----
-
-# 📌 Overview
-
-GrowthPilot is an autonomous AI Go-to-Market (GTM) Engineer that helps founders launch products from idea to growth.
-
-<!-- Unlike traditional AI assistants that forget every conversation, GrowthPilot continuously builds long-term business memory. -->
-
-Unlike traditional AI assistants that forget every conversation, GrowthPilot continuously builds long-term business memory powered by CockroachDB.
-
-It researches markets, identifies customer segments, generates launch strategies, writes marketing content, tracks outreach, analyses performance, reflects on previous launches, and improves future decisions through persistent memory.
-
-Instead of simply answering questions, GrowthPilot behaves like an AI growth teammate that becomes smarter after every interaction.
-
----
-
-<!-- # Why?
-
-Every startup founder repeats the same work:
-
-- researching competitors
-- identifying customer personas
-- writing launch posts
-- tracking outreach
-- analysing metrics
-- remembering what worked
-
-Today's AI tools generate content but forget everything after each session.
-
-GrowthPilot changes that.
-
-Every decision, experiment, customer interaction and campaign becomes part of a continuously evolving company memory. -->
-
-# ⚠️ Problem
-
-Startup founders repeatedly spend time on:
-
-❌ Competitor research<br>
-❌ Customer discovery<br>
-❌ Writing launch content<br>
-❌ Tracking campaigns<br>
-❌ Remembering lessons learned
-
----
-
-# 💡 Solution
-
-GrowthPilot is an AI GTM teammate that:
-
-✅ researches markets  
-✅ creates strategies  
-✅ generates content  
-✅ remembers company knowledge  
-✅ learns from previous campaigns
-
----
-
-# 💎 Key Differentiator
-
-Most AI assistants:
-
-Conversation → Response → Forget
-
-GrowthPilot:
-
-Conversation → Memory → Learning → Better Decisions
-
-Powered by CockroachDB, every interaction becomes reusable company knowledge.
-
----
-
-# 🎯 Hackathon MVP Scope
-
-GrowthPilot demonstrates an AI GTM workflow where a founder can:
-
-- Enter a product idea
-- Receive market research and customer insights
-- Generate a launch strategy and marketing content
-- Store company knowledge in CockroachDB
-- Ask future questions using previously learned memory
-
-This demonstrates how an AI teammate can continuously learn and improve alongside founders.
-
----
-
-<!-- # Demo Scenario -->
-# 🎬 Demo Scenario: Launching Mosaic Kitchen
-
-<!-- You tell GrowthPilot:
-
-> "I want to launch Mosaic Kitchen." -->
-
-Founder:
-
-> "I want to launch Mosaic Kitchen, a sustainable kitchen product"
-
-<!-- GrowthPilot automatically:
-
-✅ researches competitors
-
-✅ builds customer personas
-
-✅ identifies positioning
-
-✅ creates launch strategies
-
-✅ generates launch content
-
-✅ manages outreach
-
-✅ stores every interaction
-
-✅ reflects on campaign performance
-
-Next week, instead of starting from scratch, GrowthPilot remembers:
-
-- previous campaigns
-- successful messaging
-- customer feedback
-- contacted users
-- conversion rates
-- product evolution
-
-The AI grows alongside your company. -->
-
-## Step 1: Market Research
-
-The Research Agent analyzes:
-
-- competitors
-- Reddit discussions
-- customer pain points
-- market trends
-
-Example insight:
-
-> "Customers want sustainable products but are concerned about high prices."
-
-## Step 2: GTM Strategy Generation
-
-GrowthPilot creates:
-
-- customer personas
-- positioning
-- launch channels
-- marketing strategy
-
-Example recommendation:
-
-> "Target young homeowners through Reddit communities and LinkedIn content."
-
-## Step 3: Content Creation
-
-The Content Agent generates:
-
-- LinkedIn posts
-- X threads
-- email campaigns
-- landing page copy
-
-## Step 4: Persistent Memory
-
-GrowthPilot stores:
-
-- research results
-- customer insights
-- campaign decisions
-- founder preferences
-
-in CockroachDB.
-
-## Step 5: Continuous Learning
-
-One week later:
-
-Founder:
-
-> "What worked from our previous launch?"
-
-GrowthPilot retrieves previous memory:
-
-> "Reddit generated the highest engagement. Similar messaging should be tested again."
-
-GrowthPilot improves with every campaign.
-
----
-
-# ⭐ Core Features
-
-<!-- ## Persistent AI Memory -->
-## 🧠 Persistent AI Company Memory (CockroachDB)
-
-<!-- Every interaction is remembered. -->
-GrowthPilot's core capability is its long-term company memory.
-
-<!-- Examples include: -->
-Unlike traditional AI assistants that forget previous conversations, GrowthPilot continuously stores and retrieves:
-
-- customer conversations
-- launch history
-- campaign performance
-- competitor research
-- product decisions
-- founder preferences
-
-<!-- Memory survives across sessions. -->
-CockroachDB enables semantic memory retrieval, allowing GrowthPilot to learn from previous actions and provide better recommendations over time.
-
----
-
-##  🔎 AI Market Research
-
-Automatically researches:
-
-- competitors
-- Reddit discussions
-- Product Hunt launches
-- GitHub projects
-- industry trends
-- user pain points
-
-Results become searchable company knowledge.
-
----
-
-## 👥 Customer Persona Builder
-
-Automatically generates:
-
-- ICPs
-- customer personas
-- pain points
-- buying motivations
-- objections
-- preferred channels
-
----
-
-## ✍️ Content Generation
-
-Creates marketing assets including:
-
-- LinkedIn posts
-- X threads
-- newsletters
-- launch announcements
-- landing page copy
-- cold emails
-- blog articles
-
----
-
-<!-- ## Outreach Assistant -->
-## 🤝 Outreach Planning Assistant
-
-Helps manage:
-
-- leads
-- conversations
-- follow-ups
-- reply history
-- relationship status
-
-GrowthPilot never forgets previous interactions.
-
----
-
-## 📊 Analytics Agent
-
-Collects and analyses:
-
-- website traffic
-- campaign metrics
-- GitHub stars
-- signups
-- conversion rates
-
-Generates daily insights.
-
----
-
-## 🔄 Reflection Engine
-
-At the end of every day GrowthPilot performs self-reflection.
-
-It identifies:
-
-- what worked
-- what failed
-- experiments worth repeating
-- recommendations for future launches
-
-These reflections become long-term memory.
-
----
-
-# 🏗️ Multi-Agent Architecture
-
-GrowthPilot uses specialized AI agents coordinated by a Planner Agent.
-
-Each agent contributes knowledge that is stored in the shared memory layer.
-
-```
-                    User
-                      │
-              Planner Agent
-                      │
- ┌──────────┬─────────┼──────────┬─────────────┐
- │          │         │          │             │
-Research   Strategy   ICP      Content    Outreach
- Agent      Agent    Agent      Agent       Agent
- │
- └──────────────┬────────────────────────────┐
-                │
-          Analytics Agent
-                │
-         Reflection Agent
-                │
-        Memory Retrieval Layer
-                │
-        CockroachDB
-                │
-          Persistent Memory
+## Why GrowthPilot?
+
+Founders repeatedly explain the same company context to disconnected tools:
+their ideal customer, positioning, previous experiments, research, and what
+worked last week. Conventional AI generation produces another isolated answer.
+
+GrowthPilot turns that history into durable company memory. Specialized agents
+retrieve relevant context before acting, persist useful results afterwards, and
+make their memory provenance visible. A later content run can therefore use a
+reflection learned from an earlier campaign instead of starting from scratch.
+
+## The demo loop
+
+1. A founder completes onboarding. Goals, customers, channels, and previous
+   attempts become typed memories.
+2. The Market Research Agent creates structured, deduplicated research memory.
+3. The Planner routes a request to Research, Content, Analytics, or
+   memory-grounded Q&A.
+4. The Content Agent retrieves company context and produces a campaign asset.
+5. The Analytics & Reflection Agent compares simulated LinkedIn performance,
+   creates a cautious hypothesis, and saves it as `reflection` memory.
+6. The next Content run retrieves that reflection. The UI shows exactly which
+   memories were used.
+
+> Campaign likes, comments, and clicks are explicitly simulated for the
+> hackathon demo. GrowthPilot does not claim a live LinkedIn integration.
+
+## Architecture
+
+This diagram is the source-of-truth architecture for the hackathon build.
+
+```mermaid
+flowchart TB
+    Founder["Founder"] --> UI["React + TypeScript UI"]
+
+    subgraph API["FastAPI application"]
+        Auth["Cookie authentication<br/>company-scoped session"]
+        Routes["Company · Memory · Chat · Research<br/>Analytics · Traces"]
+        Planner["Planner Agent<br/>intent classification + orchestration"]
+        Research["Market Research Agent"]
+        Content["Content Agent"]
+        Analytics["Analytics & Reflection Agent"]
+        QA["Memory-grounded Q&A"]
+        Trace["Trace Repository<br/>bounded + redacted payloads"]
+    end
+
+    UI --> Auth --> Routes --> Planner
+    Planner --> Research
+    Planner --> Content
+    Planner --> Analytics
+    Planner --> QA
+
+    subgraph Memory["Memory layer"]
+        Writer["Extraction · chunking · dedup"]
+        Repository["MemoryRepository<br/>hybrid ranking"]
+        Types["episodic · semantic · user<br/>task · reflection"]
+    end
+
+    Research --> Writer
+    Content --> Writer
+    Analytics --> Writer
+    QA --> Repository
+    Research --> Repository
+    Content --> Repository
+    Analytics --> Repository
+    Writer --> Repository --> Types
+
+    subgraph AWS["AWS Bedrock · eu-west-2"]
+        Claude["Claude Sonnet<br/>reasoning + generation"]
+        Titan["Titan Text Embeddings v2<br/>1024 dimensions"]
+    end
+
+    Planner --> Claude
+    Research --> Claude
+    Content --> Claude
+    Analytics --> Claude
+    Writer --> Titan
+    Repository --> Titan
+
+    subgraph CRDB["CockroachDB Cloud · eu-west-2"]
+        Companies["companies + sessions"]
+        Memories["memories JSONB + VECTOR(1024)"]
+        Vector["Distributed Vector Index<br/>(company_id, cosine embedding)"]
+        Traces["agent_traces"]
+    end
+
+    Repository --> Memories --> Vector
+    Auth --> Companies
+    Planner --> Trace --> Traces
+    Research --> Trace
+    Content --> Trace
+    Analytics --> Trace
 ```
 
----
-
-<!-- # Memory Architecture -->
-# 🗄️ Memory Architecture Powered by CockroachDB
-
-GrowthPilot stores multiple memory types.
-
-## Episodic Memory
-
-Daily events.
-
-Example:
-
-- launched on Reddit
-- received 15 comments
-- gained 120 users
-
----
-
-## Semantic Memory
-
-Long-term knowledge.
-
-Examples:
-
-- product positioning
-- customer personas
-- competitor database
-
----
-
-## User Memory
-
-Stores founder preferences.
-
-Example:
-
-- prefers LinkedIn launches
-- focuses on AI startups
-- building Mosaic Kitchen
-
----
-
-## Task Memory
-
-Tracks:
-
-- completed tasks
-- pending work
-- blocked items
-
----
-
-## Reflection Memory
-
-Stores lessons learned after every campaign.
-
-Examples:
-
-- Reddit generated highest conversions
-- Product Hunt launch underperformed
-- Email subject line increased CTR
-
----
-
-# 🏆 Hackathon Implementation
-
-The hackathon version focuses on proving the core AI memory-driven GTM workflow:
-
-- Multi-agent GTM workflow
-- Persistent memory with CockroachDB
-- Market research agent
-- GTM strategy generation
-- Marketing content generation
-- Memory retrieval across conversations
-
-The system runs on AWS infrastructure, using CockroachDB Cloud as the persistent memory layer for storing and retrieving company knowledge.
-
-
-Additional capabilities such as CRM integration, advanced analytics, and autonomous launches are part of the future roadmap.
-
----
-
-# 🛠️ Tech Stack
-
-## Frontend
-
-- React
-- TypeScript
-- Tailwind CSS
-- shadcn/ui
-
-## Backend
-
-- FastAPI
-- Python
-
-## AI
-
-- OpenAI / Claude
-- LangChain
-- MCP
-- Tool Calling
-
-## Memory
-
-- CockroachDB Cloud
-
-## Infrastructure
-
-- AWS Lambda
-- S3
-- Bedrock (optional)
-- CloudWatch
-
----
-
-# ⚙️ MCP Workflow
-
-```
-User Request
-
-↓
-
-Planner Agent
-
-↓
-
-Tool Selection
-
-↓
-
-MCP Server
-
-↓
-
-CockroachDB
-
-↓
-
-Memory Retrieval
-
-↓
-
-LLM Reasoning
-
-↓
-
-Agent Response
-
-↓
-
-Memory Extraction
-
-↓
-
-CockroachDB Update
+### Memory improvement loop
+
+```mermaid
+flowchart LR
+    O["Onboarding"] --> U["User + episodic memory"]
+    U --> R["Research"] --> S["Semantic memory"]
+    S --> C1["Content generation"]
+    C1 --> P["Simulated performance"]
+    P --> A["Deterministic analytics"]
+    A --> F["Bedrock reflection"]
+    F --> M["Reflection memory"]
+    M --> C2["Next content run"]
+    C2 --> V["Visible memory provenance"]
 ```
 
-GrowthPilot does not just answer questions — it builds institutional memory for startups.
+## What is implemented
 
-Every conversation updates long-term business memory.
+| Capability | Implementation |
+|---|---|
+| Persistent memory | Five typed memory categories stored in CockroachDB |
+| Semantic retrieval | Titan embeddings and CockroachDB cosine vector search |
+| Hybrid ranking | Similarity combined with recency and importance |
+| Tenant isolation | Every memory query is scoped by authenticated `company_id` |
+| Onboarding | Company profile plus typed founder memories |
+| Planner | Single, parallel, and dependency-aware sequential execution |
+| Market Research | Bedrock- or user-source findings, structured and deduplicated |
+| Content Generation | Memory-grounded marketing content persisted as task memory |
+| Analytics & Reflection | Deterministic comparison plus Bedrock narrative and saved reflection |
+| Memory Inspector | Retrieved content, type, similarity, recency, and importance |
+| Observability | Per-agent duration, success/error, output, and retrieved-memory traces |
+| Authentication | Hashed credentials and secure company-scoped session cookies |
+| Resilience | CockroachDB `40001` transaction retry and non-blocking trace failures |
 
----
+### Honest scope boundary
 
-<!-- # Example Workflow
+- Market research is generated from the company profile or user-supplied source
+  text; it is not a general-purpose web crawler.
+- Analytics uses seeded, simulated LinkedIn performance.
+- GrowthGraph synthetic cohort seeding and its privacy-safe frontend contract
+  exist. The cross-tenant `POST /api/growthgraph/insights` implementation is a
+  separate T36 deliverable and must never expose raw tenant data.
+- CRM automation, live social publishing, and autonomous paid campaigns are
+  roadmap items, not current capabilities.
 
-Founder:
+## Why CockroachDB?
 
-> Launch Mosaic Kitchen.
+GrowthPilot needs relational integrity, JSON metadata, tenant-scoped access,
+transactional writes, and semantic retrieval in the same durable system.
+CockroachDB provides that without adding a separate vector database.
 
-GrowthPilot automatically:
+### Distributed Vector Indexing
 
-1. Research competitors
+Memories use `VECTOR(1024)` embeddings and cosine distance. The vector index is
+prefixed by `company_id`:
 
-2. Build ICP
+```sql
+VECTOR INDEX (company_id, embedding vector_cosine_ops)
+```
 
-3. Generate GTM strategy
+The prefix both narrows the search space and enforces the query shape used for
+tenant isolation. Single-tenant retrieval uses `company_id = $1`; approved
+cross-tenant aggregate work must use an explicit `company_id IN (...)`
+allowlist, never an unconstrained range.
 
-4. Create launch content
+### Production-minded database behavior
 
-5. Schedule outreach
+- Full transactions retry on CockroachDB serialization error `40001`.
+- Bedrock embedding calls happen outside retried transactions, avoiding repeated
+  cost and latency.
+- Content hashes provide idempotent memory deduplication.
+- JSONB stores typed provenance without fragmenting the memory table.
+- Traces are bounded and recursively redact credentials, cookies, and tokens.
 
-6. Save company knowledge
+More detail is available in [`docs/memory.md`](docs/memory.md).
 
-7. Monitor campaign
+## Why AWS Bedrock?
 
-8. Reflect on performance
+GrowthPilot uses AWS Bedrock in `eu-west-2` for two distinct jobs:
 
-9. Improve future launches
+- **Titan Text Embeddings v2** creates 1024-dimensional memory embeddings.
+- **Claude Sonnet** performs intent classification, research synthesis, content
+  generation, and reflection writing.
 
---- -->
+The Analytics Agent calculates all engagement totals and averages in Python
+before asking the model for a narrative. The LLM cannot silently change the
+winning group or invent unsupported metrics.
 
-# 🎥 Demo Preview
+## API surface
 
-Coming soon:
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/health` | Service health |
+| `POST` | `/api/auth/signup` | Create a company account |
+| `POST` | `/api/auth/login` | Start a secure session |
+| `POST` | `/api/auth/logout` | End the session |
+| `GET` | `/api/company/me` | Current company profile |
+| `POST` | `/api/company/onboarding` | Save profile and founder memories |
+| `POST` | `/api/memory/search` | Tenant-scoped semantic memory search |
+| `POST` | `/api/chat/stream` | Planner-orchestrated SSE response |
+| `POST` | `/api/chat/generate-content` | Direct Content Agent compatibility route |
+| `POST` | `/api/research/run` | Run Market Research |
+| `GET` | `/api/research/memories` | Read saved research findings |
+| `GET` | `/api/analytics/latest` | Read the newest saved analytics reflection |
+| `POST` | `/api/analytics/reflection` | Analyze campaign memories and save a reflection |
+| `GET` | `/api/traces` | Recent company-scoped agent traces |
+| `GET` | `/api/traces/{trace_id}` | One trace with safe details |
 
-- Product launch workflow
-- Agent interactions
-- Memory retrieval demonstration
-- CockroachDB knowledge storage
+## Local setup
 
----
+### Prerequisites
 
-# 📊 Analytics & Reflection Agent Demo
+- Python 3.11+
+- Node.js 22+
+- A CockroachDB Cloud cluster with vector indexing enabled
+- AWS credentials with Bedrock model access in `eu-west-2`
 
-The Analytics & Reflection Agent closes GrowthPilot's learning loop:
+### 1. Install the backend
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+cp .env.example .env
+```
+
+Fill in `DATABASE_URL` and AWS settings in `.env`. Never commit that file.
+
+### 2. Apply migrations
+
+```bash
+python scripts/migrate.py
+```
+
+The first migration enables CockroachDB vector indexing. Your database user
+must have permission to update that cluster setting.
+
+### 3. Seed the single-founder demo
+
+```bash
+python scripts/seed_demo_founder.py
+```
+
+This creates a repeatable FlowForge AI demo history, including simulated
+published LinkedIn performance.
+
+### 4. Start the API
+
+```bash
+uvicorn backend.main:app --reload --port 8000
+```
+
+### 5. Start the frontend
+
+```bash
+cd frontend
+npm ci
+cp .env.example .env
+npm run dev
+```
+
+Vite proxies `/api` to `http://localhost:8000`. For separate deployments, set
+`VITE_API_BASE_URL` and add the exact frontend origin to the backend CORS list.
+Cookie authentication cannot use a wildcard origin.
+
+## Run the reflection demo directly
+
+```bash
+python scripts/run_analytics_reflection.py --group-by theme
+```
+
+Other supported dimensions:
+
+```bash
+python scripts/run_analytics_reflection.py --group-by icp
+python scripts/run_analytics_reflection.py --group-by messaging_angle
+```
+
+## Tests
+
+Pull-request CI runs tests that do not require external credentials:
+
+```bash
+ruff check backend
+pytest backend/tests -q -m "not integration"
+cd frontend && npm ci && npm run lint && npm run build
+```
+
+Real CockroachDB integration tests are intentionally separate:
+
+```bash
+pytest backend/tests -q -m integration
+```
+
+They require a valid `DATABASE_URL` and should only run in a trusted,
+secret-backed environment.
+
+## Repository map
 
 ```text
-Simulated campaign performance
-→ deterministic comparison
-→ Bedrock-generated reflection
-→ CockroachDB reflection memory
-→ better context for future content
+backend/
+  agents/       Agent lifecycle, Planner, Research, Content, Analytics, traces
+  api/          Authenticated FastAPI routes
+  memory/       Retrieval, ranking, extraction, chunking, dedup, persistence
+  migrations/   CockroachDB schema and trace migration
+  tests/        Unit, API, resilience, and real-cluster integration tests
+frontend/       Vite/React client
+scripts/        Migrations, deterministic seeds, and demo runners
+docs/           Memory design and API contracts
 ```
 
-For the hackathon demo, the agent analyzes seeded LinkedIn content using
-`likes`, `comments`, and `clicks`. It can compare performance by content
-theme, ICP, or messaging angle. The numerical analysis is calculated in
-Python; AWS Bedrock turns those results into a concise reflection and next
-experiment. The reflection is then stored with
-`memory_type = "reflection"` so future agent runs can retrieve it.
+## Security and privacy
 
-> **Demo data:** Campaign performance is simulated. This workflow does not
-> connect to the LinkedIn API or Google Analytics.
+- All company data is scoped from the authenticated session, not a client-
+  supplied tenant ID.
+- Session cookies are HTTP-only and configurable for Secure/SameSite behavior.
+- CORS uses explicit allowed origins when credentials are enabled.
+- Trace payloads redact sensitive keys and enforce size/depth limits.
+- GrowthGraph responses are designed to return cohort aggregates only: no
+  company IDs, memory IDs, founder names, or raw memory content.
+- `.env`, certificates, and cloud credentials must never be committed.
 
-## Run the demo
+## Team
 
-Seed FlowForge AI's previous-week memories:
+GrowthPilot was built collaboratively for the CockroachDB × AWS AI Agent
+Hackathon 2026, spanning memory architecture, agent orchestration, frontend,
+API design, testing, and deployment.
 
-```bash
-.venv/bin/python scripts/seed_demo_founder.py
-```
+## License
 
-Analyze performance by content theme:
-
-```bash
-.venv/bin/python scripts/run_analytics_reflection.py --group-by theme
-```
-
-The other supported comparison dimensions are:
-
-```bash
-.venv/bin/python scripts/run_analytics_reflection.py --group-by icp
-.venv/bin/python scripts/run_analytics_reflection.py --group-by messaging_angle
-```
-
-Run the ticket-specific tests:
-
-```bash
-.venv/bin/pytest \
-  backend/tests/test_analytics_reflection.py \
-  backend/tests/test_demo_founder_seed.py
-```
-
-The generated memory includes provenance metadata such as the analysis
-dimension, winning group, post count, analyzed memory IDs, and aggregated
-engagement metrics.
-This makes the reflection inspectable and reusable by later Content
-Generation runs.
-
----
-
-# 🗺️ Future Roadmap
-
-## Phase 1
-
-- Persistent Memory
-- Research Agent
-- Strategy Agent
-
-## Phase 2
-
-- Outreach Agent
-- CRM Integration
-- Analytics
-
-## Phase 3
-
-- Autonomous Launches
-- Multi-product Memory
-- Company Knowledge Graph
-
----
-
-# 🌱 Vision
-
-GrowthPilot is not designed to replace marketers.
-
-It is designed to become an AI growth teammate that continuously learns alongside founders.
-
-Instead of forgetting every conversation, it builds an evolving memory of products, customers, experiments and decisions—helping startups compound knowledge over time.
+This project is available under the [MIT License](LICENSE).
