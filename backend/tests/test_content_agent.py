@@ -1,11 +1,13 @@
-import pytest
-from unittest.mock import AsyncMock, MagicMock
 import uuid
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from backend.agents.content import ContentAgent
 from backend.agents.context import AgentContext
 from backend.memory.store import MemoryHit
-from scripts.seed_demo_founder import DEMO_MEMORIES, COMPANY_ID
+from scripts.seed_demo_founder import COMPANY_ID, DEMO_MEMORIES
+
 
 @pytest.fixture
 def mock_bedrock_client():
@@ -66,7 +68,10 @@ async def test_content_agent_with_memories(agent_context):
     # Assert that specific seeded context from FlowForge AI is present in the prompt
     assert "Sarah's initial positioning for FlowForge AI" in system_prompt  # User memory
     assert "GitHub Copilot, Linear, Jira" in system_prompt  # Semantic memory
-    assert "Future content should focus more on practical engineering" in system_prompt  # Reflection memory
+    assert (
+        "Future content should focus more on practical engineering"
+        in system_prompt
+    )  # Reflection memory
     
     # Verify the generated content was saved back to memory
     agent_context.memory_repository.write.assert_called_once()

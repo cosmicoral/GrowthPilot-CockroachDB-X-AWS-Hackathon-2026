@@ -1,8 +1,10 @@
 from datetime import datetime
 from typing import Sequence
 from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+
 from backend.api.deps import get_current_company_id
 from backend.llm.client import BedrockClient
 from backend.memory.embedding import BedrockEmbeddingService

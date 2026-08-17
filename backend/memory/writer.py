@@ -1,4 +1,6 @@
 from backend.memory.hash import create_content_hash
+
+
 class MemoryWriter:
     """
     Coordinates the memory creation pipeline.
@@ -16,7 +18,13 @@ class MemoryWriter:
     CockroachDB
     """
 
-    def __init__(self, chunker, embedding_service, repository, extraction_policy):
+    def __init__(
+        self,
+        chunker,
+        embedding_service,
+        repository,
+        extraction_policy
+    ):
         self.chunker = chunker
         self.embedding_service = embedding_service
         self.repository = repository

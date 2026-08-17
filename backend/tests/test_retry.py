@@ -8,7 +8,9 @@ milliseconds.
 
 import asyncpg
 import pytest
+
 from backend.database.database import to_vector_literal, with_retry
+
 
 async def test_retries_until_success():
     attempts = 0

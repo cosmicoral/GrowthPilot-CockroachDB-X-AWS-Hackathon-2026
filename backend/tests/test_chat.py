@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 from backend.api.chat import router as chat_router
 from backend.api.deps import get_current_company_id
 
-
 app = FastAPI()
 app.include_router(chat_router)
 client = TestClient(app)
@@ -96,7 +95,11 @@ def test_generate_content_success(mock_agent_class):
     
     # Create a mock result
     from backend.agents.base import AgentResult
-    mock_agent_instance.run.return_value = AgentResult(agent_name="content", success=True, output="Generated post")
+    mock_agent_instance.run.return_value = AgentResult(
+        agent_name="content",
+        success=True,
+        output="Generated post",
+    )
 
     response = client.post("/api/chat/generate-content", json={"prompt": "test prompt"})
 
@@ -115,7 +118,11 @@ def test_generate_content_failure(mock_agent_class):
     mock_agent_class.return_value = mock_agent_instance
     
     from backend.agents.base import AgentResult
-    mock_agent_instance.run.return_value = AgentResult(agent_name="content", success=False, output="Error occurred")
+    mock_agent_instance.run.return_value = AgentResult(
+        agent_name="content",
+        success=False,
+        output="Error occurred",
+    )
 
     response = client.post("/api/chat/generate-content", json={"prompt": "test prompt"})
 

@@ -25,7 +25,6 @@ from backend.memory.store import (
     MemoryType,
 )
 
-
 EMBEDDING_DIMENSION = 1024
 
 SEMANTIC_SIMILARITY_THRESHOLD = 0.90
@@ -473,7 +472,7 @@ class MemoryRepository:
         Retrieve a memory by ID.
         """
 
-        query = f"""
+        query = """
         SELECT
             id,
             company_id,

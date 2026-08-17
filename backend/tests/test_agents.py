@@ -1,6 +1,8 @@
-from uuid import uuid4
 from unittest.mock import MagicMock
+from uuid import uuid4
+
 import pytest
+
 from backend.agents import Agent, AgentContext, AgentResult
 
 

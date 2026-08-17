@@ -1,13 +1,12 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-import pytest
 import asyncpg
+import pytest
 
-from backend.database.database import database, to_vector_literal
+from backend.database.database import database
 from backend.memory.repository import MemoryRepository
 from backend.memory.store import MemoryHit
-
 
 # ---------------------------------------------------------------------------
 # Save-memory mocks

@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 SENSITIVE_METADATA_KEYS = {
     "password",
     "passwd",
@@ -48,13 +47,31 @@ def contains_sensitive_data(value: str) -> bool:
     )
 
 
-def contains_sensitive_metadata(metadata: dict[str, Any]) -> bool:
-    """Return True when metadata contains a sensitive key."""
-    return any(
-        str(key).strip().lower() in SENSITIVE_METADATA_KEYS
-        for key in metadata
-    )
+def _normalize_metadata_key(key: object) -> str:
+    """Normalize metadata keys for case and separator-insensitive matching."""
+    value = str(key).strip()
 
+    value = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", value)
+
+    return value.lower().replace("-", "_").replace(" ", "_")
+
+def contains_sensitive_metadata(metadata: dict[str, Any]) -> bool:
+    """Return True when metadata contains a sensitive key, recursively."""
+    for key, value in metadata.items():
+        normalized_key = _normalize_metadata_key(key)
+
+        if normalized_key in SENSITIVE_METADATA_KEYS:
+            return True
+
+        if isinstance(value, dict) and contains_sensitive_metadata(value):
+            return True
+
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict) and contains_sensitive_metadata(item):
+                    return True
+
+    return False
 
 def is_safe_memory(
     content: str,

@@ -1,15 +1,14 @@
-import pytest
-
+from unittest.mock import AsyncMock
 from uuid import uuid4
-from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from backend.memory.chunker import TextChunker
 from backend.memory.embedding import BedrockEmbeddingService
-from backend.memory.hash import create_content_hash
-from backend.memory.writer import MemoryWriter
 from backend.memory.extraction import MemoryExtractionPolicy
-from backend.tests.mocks.repository import MockMemoryRepository
+from backend.memory.writer import MemoryWriter
 from backend.tests.mocks.bedrock import MockBedrockClient
+from backend.tests.mocks.repository import MockMemoryRepository
 
 
 async def create_writer(extraction_response='{"memories": []}'):

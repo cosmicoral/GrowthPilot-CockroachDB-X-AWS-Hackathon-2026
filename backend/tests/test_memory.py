@@ -9,7 +9,6 @@ from backend.api.deps import get_current_company_id
 from backend.api.memory import router as memory_router
 from backend.memory.store import MemoryHit
 
-
 app = FastAPI()
 app.include_router(memory_router)
 client = TestClient(app)
@@ -63,7 +62,8 @@ def test_search_memories_empty_query(mock_repo_class):
     mock_repo_class.return_value.search = AsyncMock(return_value=[])
 
     try:
-        response = client.post(
+        # response = client.post(
+        client.post(
             "/api/memory/search",
             json={
                 "query": "",
@@ -85,7 +85,8 @@ def test_search_memories_invalid_k(mock_repo_class):
     mock_repo_class.return_value.search = AsyncMock(return_value=[])
 
     try:
-        response = client.post(
+        # response = client.post(
+        client.post(
             "/api/memory/search",
             json={
                 "query": "test",

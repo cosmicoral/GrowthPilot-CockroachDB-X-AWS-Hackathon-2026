@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from backend.memory.extraction import MemoryExtractionPolicy
 from backend.tests.mocks.bedrock import MockBedrockClient

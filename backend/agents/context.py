@@ -1,4 +1,5 @@
 from uuid import UUID
+
 from backend.llm.client import BedrockClient
 from backend.memory.repository import MemoryRepository
 

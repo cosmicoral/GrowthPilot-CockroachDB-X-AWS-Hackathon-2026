@@ -1,5 +1,4 @@
 import logging
-from typing import Any
 
 from backend.agents.base import Agent
 from backend.memory.store import MemoryHit
@@ -51,9 +50,10 @@ class ContentAgent(Agent):
 
         system_prompt = (
             "You are an expert Go-To-Market content creator. "
-            "Your goal is to write high-converting, engaging social media posts or outreach messages "
-            "for a startup founder.\n\n"
-            "Below is the relevant background context about the founder's startup, market, and preferences:\n"
+            "Your goal is to write high-converting, engaging social media "
+            "posts or outreach messages for a startup founder.\n\n"
+            "Below is the relevant background context about the founder's "
+            "startup, market, and preferences:\n"
             "<context>\n"
             f"{context_text}\n"
             "</context>\n\n"

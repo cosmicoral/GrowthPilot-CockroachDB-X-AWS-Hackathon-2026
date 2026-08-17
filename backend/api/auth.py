@@ -1,10 +1,12 @@
-from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import os
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
-from fastapi import APIRouter, HTTPException, status, Response
+
+from fastapi import APIRouter, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr, Field
+
 from backend.database.database import database
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])

@@ -1,5 +1,6 @@
-from backend.database.database import to_vector_literal
 import pytest
+
+from backend.database.database import to_vector_literal
 
 
 def test_to_vector_literal_formats_embedding():

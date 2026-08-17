@@ -1,10 +1,12 @@
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
-from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
-from fastapi import FastAPI, Depends, status
+
+from fastapi import Depends, FastAPI, status
 from fastapi.testclient import TestClient
-from backend.api.auth import hash_password, verify_password, router as auth_router
+
+from backend.api.auth import hash_password, verify_password
+from backend.api.auth import router as auth_router
 from backend.api.deps import get_current_company_id
 
 app = FastAPI()

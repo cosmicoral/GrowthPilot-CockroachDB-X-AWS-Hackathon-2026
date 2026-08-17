@@ -1,7 +1,9 @@
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
+
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
+
 from backend.api.company import router as company_router
 from backend.api.deps import get_current_company_id
 
