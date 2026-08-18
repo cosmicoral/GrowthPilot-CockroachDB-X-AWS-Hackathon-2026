@@ -454,6 +454,28 @@ Additional capabilities such as CRM integration, advanced analytics, and autonom
 - Bedrock (optional)
 - CloudWatch
 
+## Local development
+
+Start the FastAPI backend:
+
+```bash
+source .venv/bin/activate
+uvicorn backend.main:app --reload --port 8000
+```
+
+Start the single canonical frontend in another terminal:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Vite proxies `/api` to `http://localhost:8000` by default. For separate
+deployments, copy `frontend/.env.example` and set `VITE_API_BASE_URL` to the
+public FastAPI origin. Cookie authentication requires that origin to be listed
+in `ALLOWED_FRONTEND_ORIGINS` on the backend.
+
 ---
 
 # ⚙️ MCP Workflow

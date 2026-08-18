@@ -15,8 +15,8 @@ router = APIRouter(prefix="/api/memory", tags=["Memory"])
 
 
 class MemorySearchRequest(BaseModel):
-    query: str = Field(min_length=1)
-    k: int = Field(ge=1, le=50)
+    query: str = Field(min_length=1, max_length=4000)
+    k: int = Field(default=8, ge=1, le=50)
     types: Sequence[MemoryType] | None = None
     since: datetime | None = None
 
