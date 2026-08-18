@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import AsyncMock, call
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
@@ -13,8 +13,6 @@ from backend.agents.analytics_reflection import (
     AnalyticsReflectionAgent,
     AnalyticsReflectionOutput,
 )
-
-
 from backend.agents.context import AgentContext
 from backend.agents.skills.loader import SkillLoader
 from backend.memory.store import MemoryHit

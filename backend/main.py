@@ -10,7 +10,6 @@ from backend.api.health import router as health_router
 from backend.api.memory import router as memory_router
 from backend.api.research import router as research_router
 from backend.api.traces import router as traces_router
-
 from backend.auth_config import get_auth_settings
 from backend.database.database import database
 
