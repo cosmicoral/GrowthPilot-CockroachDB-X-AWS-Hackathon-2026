@@ -1,0 +1,22 @@
+# AWS App Runner — backend service configuration.
+#
+# App Runner (not Lambda) because /chat streams over SSE. API Gateway +
+# Lambda does not support server-sent events cleanly, and the chat stream
+# is the part of the demo that shows memory retrieval happening live.
+#
+# No environment variables are declared here on purpose: this repository is
+# public. DATABASE_URL, AWS credentials and Bedrock model IDs are set in the
+# App Runner console under Configuration -> Environment variables.
+version: 1.0
+runtime: python311
+
+build:
+  commands:
+    build:
+      - pip install .
+
+run:
+  runtime-version: 3.11
+  command: uvicorn backend.main:app --host 0.0.0.0 --port 8000
+  network:
+    port: 8000

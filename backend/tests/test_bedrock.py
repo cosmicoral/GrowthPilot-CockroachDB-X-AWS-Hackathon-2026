@@ -24,7 +24,12 @@ async def test_get_embedding(mock_boto3_client):
     }
     mock_boto3_client.invoke_model.return_value = mock_response
 
-    client = BedrockClient(region_name="eu-west-2")
+    # Model IDs are passed explicitly so the assertions below do not depend
+    # on whatever BEDROCK_* values happen to be set in the developer's .env.
+    client = BedrockClient(
+        region_name="us-east-1",
+        embedding_model="amazon.titan-embed-text-v2:0",
+    )
     embedding = await client.get_embedding("hello world")
 
     assert len(embedding) == 1024
@@ -50,7 +55,10 @@ async def test_generate_text(mock_boto3_client):
     }
     mock_boto3_client.invoke_model.return_value = mock_response
 
-    client = BedrockClient(region_name="eu-west-2")
+    client = BedrockClient(
+        region_name="us-east-1",
+        text_model="anthropic.claude-sonnet-4-6",
+    )
     text = await client.generate_text("generate a marketing slogan", system_prompt="be helpful")
 
     assert text == "Generated text response"

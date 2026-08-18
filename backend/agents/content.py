@@ -71,7 +71,6 @@ class ContentAgent(Agent):
         generated_content = await self.context.bedrock_client.generate_text(
             prompt=prompt,
             system_prompt=system_prompt,
-            model_id="anthropic.claude-sonnet-4-6",
             max_tokens=1000,
             temperature=0.7
         )

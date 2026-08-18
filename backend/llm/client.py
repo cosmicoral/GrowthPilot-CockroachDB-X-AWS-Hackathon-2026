@@ -14,13 +14,25 @@ class BedrockClient:
         self,
         region_name: str | None = None,
         embedding_model: str | None = None,
+        text_model: str | None = None,
     ):
         """
         Initialize the Bedrock client runtime using environment settings.
+
+        Region and both model IDs are environment-driven so the deployed
+        service can be pointed at a different Bedrock region without a
+        code change. This matters because on-demand quota is granted
+        per-region: the EU regions returned ThrottlingException on every
+        request, so runtime inference is served from us-east-1.
         """
-        self.region_name = region_name or os.getenv("AWS_REGION", "eu-west-2")
+        self.region_name = region_name or os.getenv("AWS_REGION", "us-east-1")
         self.embedding_model = embedding_model or os.getenv(
             "BEDROCK_EMBEDDING_MODEL", "amazon.titan-embed-text-v2:0"
+        )
+        # Must be an inference-profile ID (the `us.` prefix), not a bare model
+        # ID -- us-east-1 rejects bare Claude model IDs for on-demand calls.
+        self.text_model = text_model or os.getenv(
+            "BEDROCK_TEXT_MODEL", "us.anthropic.claude-sonnet-4-6"
         )
         self.client = boto3.client("bedrock-runtime", region_name=self.region_name)
 
@@ -49,7 +61,7 @@ class BedrockClient:
         self,
         prompt: str,
         system_prompt: str | None = None,
-        model_id: str = "anthropic.claude-sonnet-4-6",
+        model_id: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ) -> str:
@@ -72,7 +84,7 @@ class BedrockClient:
 
         response = await asyncio.to_thread(
             self.client.invoke_model,
-            modelId=model_id,
+            modelId=model_id or self.text_model,
             contentType="application/json",
             accept="application/json",
             body=body
@@ -85,7 +97,7 @@ class BedrockClient:
         self,
         prompt: str,
         system_prompt: str | None = None,
-        model_id: str = "anthropic.claude-sonnet-4-6",
+        model_id: str | None = None,
         max_tokens: int = 2048,
         temperature: float = 0.7,
     ):
@@ -110,7 +122,7 @@ class BedrockClient:
 
         response = await asyncio.to_thread(
             self.client.invoke_model_with_response_stream,
-            modelId=model_id,
+            modelId=model_id or self.text_model,
             contentType="application/json",
             accept="application/json",
             body=body,
