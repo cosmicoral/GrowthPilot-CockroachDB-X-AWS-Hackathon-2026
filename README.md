@@ -452,6 +452,13 @@ subsequent request is a `401`. Proxying `/api/*` through the frontend origin
 makes the cookie first-party and removes the CORS surface entirely. Leave
 `VITE_API_BASE_URL` unset so the client issues same-origin relative requests.
 
+During a proxy rollout, an explicitly cross-origin frontend build has a
+compatibility path: login/signup request a bearer session and keep it in
+per-tab `sessionStorage`, then send it through the API's existing
+`Authorization: Bearer` support. The token is never persisted to localStorage.
+The same-origin proxy plus HTTP-only cookie remains the preferred production
+configuration.
+
 The second rule is SPA deep-link handling: `404-200` serves `index.html` with a
 `200` when a path does not match a build artifact. A plain `200` rewrite would
 intercept static assets too.

@@ -1,4 +1,19 @@
-import { apiRequest } from "./client"
+import {
+  apiRequest,
+  clearSessionToken,
+  setSessionToken,
+  USES_CROSS_ORIGIN_API,
+} from "./client"
+
+interface SessionResponse {
+  company_id: string
+  session_token?: string
+}
+
+function rememberBearerSession(response: SessionResponse) {
+  if (response.session_token) setSessionToken(response.session_token)
+  return response
+}
 
 export interface CompanyProfile {
   id: string
@@ -28,22 +43,34 @@ export interface OnboardingInput {
   current_channels: string
 }
 
-export function login(input: { email: string; password: string }) {
-  return apiRequest<{ company_id: string }>("/api/auth/login", {
+export async function login(input: { email: string; password: string }) {
+  const response = await apiRequest<SessionResponse>("/api/auth/login", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      use_bearer_token: USES_CROSS_ORIGIN_API,
+    }),
   })
+  return rememberBearerSession(response)
 }
 
-export function signup(input: SignupInput) {
-  return apiRequest<{ company_id: string }>("/api/auth/signup", {
+export async function signup(input: SignupInput) {
+  const response = await apiRequest<SessionResponse>("/api/auth/signup", {
     method: "POST",
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      ...input,
+      use_bearer_token: USES_CROSS_ORIGIN_API,
+    }),
   })
+  return rememberBearerSession(response)
 }
 
-export function logout() {
-  return apiRequest<null>("/api/auth/logout", { method: "POST" })
+export async function logout() {
+  try {
+    return await apiRequest<null>("/api/auth/logout", { method: "POST" })
+  } finally {
+    clearSessionToken()
+  }
 }
 
 export function getCurrentCompany() {

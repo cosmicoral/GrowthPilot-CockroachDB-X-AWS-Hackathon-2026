@@ -278,6 +278,41 @@ def test_login_creates_session_without_returning_token(mock_db, client, monkeypa
 
 
 @patch("backend.api.auth.database")
+def test_login_can_return_bearer_session_for_cross_origin_spa(
+    mock_db,
+    client,
+    monkeypatch,
+):
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
+    company_uuid = uuid4()
+    password = "securepassword"
+    conn = configure_mock_database(mock_db)
+    conn.fetch.return_value = [{
+        "id": company_uuid,
+        "password_hash": hash_password(password),
+    }]
+
+    response = client.post(
+        "/api/auth/login",
+        json={
+            "email": "user@acme.com",
+            "password": password,
+            "use_bearer_token": True,
+        },
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    session_token = response.json()["session_token"]
+    session_insert = next(
+        call
+        for call in conn.execute.await_args_list
+        if "INSERT INTO sessions" in call.args[0]
+    )
+    assert session_insert.args[1] == hash_session_token(session_token)
+    assert response.json()["company_id"] == str(company_uuid)
+
+
+@patch("backend.api.auth.database")
 def test_login_upgrades_legacy_password_hash(mock_db, client, monkeypatch):
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
     company_uuid = uuid4()
