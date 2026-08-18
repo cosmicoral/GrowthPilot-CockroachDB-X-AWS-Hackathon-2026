@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
@@ -13,6 +14,7 @@ from backend.agents.analytics_reflection import (
     AnalyticsReflectionOutput,
 )
 from backend.agents.context import AgentContext
+from backend.agents.skills.loader import SkillLoader
 from backend.memory.store import MemoryHit
 from backend.memory.stub import InMemoryStore
 
@@ -585,3 +587,54 @@ async def test_future_content_run_can_retrieve_reflection(
     )
 
     assert GENERATED_REFLECTION in future_content_prompt
+
+
+def test_campaign_analysis_skill_is_discovered_and_loaded():
+    skills_dir = Path("backend/agents/skills")
+    loader = SkillLoader(skills_dir)
+
+    discovered = loader.discover()
+
+    assert "campaign_analysis" in discovered
+
+    skill = loader.load("campaign_analysis")
+
+    assert skill is not None
+    assert skill.name == "campaign-analysis"
+    assert "campaign performance" in skill.description.lower()
+    assert "Identify the most important performance metrics." in skill.instructions
+
+
+@pytest.mark.asyncio
+async def test_analytics_agent_uses_campaign_analysis_skill(
+    performance_memories,
+):
+    agent, bedrock, _ = build_agent(performance_memories)
+
+    result = await agent.run(group_by="theme")
+
+    assert result.success is True
+
+    call = bedrock.generate_text.await_args.kwargs
+
+    assert "campaign performance" in call["prompt"].lower()
+    assert "Identify the most important performance metrics." in call["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_missing_campaign_analysis_skill_is_handled_gracefully(
+    performance_memories,
+):
+    agent, bedrock, repository = build_agent(performance_memories)
+
+    agent.context.skill_loader = SkillLoader(
+        Path("backend/agents/skills/does-not-exist")
+    )
+
+    result = await agent.run(group_by="theme")
+
+    assert result.success is False
+    assert "Required campaign-analysis skill is unavailable" in result.output
+
+    bedrock.generate_text.assert_not_awaited()
+    repository.write.assert_not_awaited()
