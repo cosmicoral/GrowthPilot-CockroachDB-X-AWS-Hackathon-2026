@@ -26,7 +26,7 @@ T = TypeVar("T")
 SERIALIZATION_FAILURE = "40001"
 
 async def _init_connection(conn: asyncpg.Connection) -> None:
-    """Register type codecs asyncpg doesn't know about.
+    """Register type codecs and session settings asyncpg/CockroachDB need.
 
     Runs once per new pooled connection, so every query gets them without
     callers having to serialise by hand.
@@ -39,6 +39,26 @@ async def _init_connection(conn: asyncpg.Connection) -> None:
         decoder=json.loads,
         schema="pg_catalog",
     )
+
+    # CockroachDB v26.2 rejects a second statement on a connection while an
+    # earlier result portal is still open:
+    #
+    #   unimplemented: multiple active portals is in preview, please set
+    #   session variable multiple_active_portals_enabled to true
+    #
+    # asyncpg's fetchval/fetchrow bind a portal with a row limit rather than
+    # draining the result, so the portal stays suspended. Any code path that
+    # runs several statements inside one transaction hits this -- including
+    # _save_or_merge_memory, which checks the content hash, looks for a
+    # semantic duplicate, then inserts. That is every memory write in the
+    # system, not an edge case.
+    #
+    # Enabling the session variable is CockroachDB's own suggested remedy and
+    # is applied here so it covers every pooled connection uniformly. The
+    # narrower alternative is to replace fetchrow/fetchval with fetch() in
+    # the repository so each result set is fully drained; that avoids relying
+    # on a preview feature and is the better long-term fix.
+    await conn.execute("SET multiple_active_portals_enabled = true")
 
 
 class Database:
