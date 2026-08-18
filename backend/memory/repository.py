@@ -102,6 +102,66 @@ LIMIT $6
 """
 
 
+CROSS_COMPANY_SEARCH_SQL = f"""
+WITH candidates AS MATERIALIZED
+(
+    SELECT
+        id,
+        company_id,
+        content,
+        memory_type,
+        metadata,
+        importance,
+        created_at,
+        1.0 - (
+            embedding <=> $2::VECTOR({EMBEDDING_DIMENSION})
+        ) AS similarity
+    FROM memories
+    WHERE company_id = ANY($1::UUID[])
+      AND (
+          $4::STRING[] IS NULL
+          OR memory_type = ANY($4::STRING[])
+      )
+      AND (
+          $5::TIMESTAMPTZ IS NULL
+          OR created_at >= $5
+      )
+    ORDER BY embedding <=> $2::VECTOR({EMBEDDING_DIMENSION})
+    LIMIT $3
+)
+SELECT
+    id,
+    company_id,
+    content,
+    memory_type,
+    metadata,
+    importance,
+    similarity,
+    created_at
+FROM candidates
+ORDER BY
+    GREATEST(similarity, 0.0)
+    *
+    POWER(
+        0.5::FLOAT8,
+        GREATEST(
+            EXTRACT(
+                EPOCH FROM (now() - created_at)
+            ),
+            0.0
+        )
+        /
+        (30.0 * 86400.0)
+    )
+    *
+    GREATEST(importance, 0.01) DESC,
+    similarity DESC,
+    created_at DESC,
+    id ASC
+LIMIT $6
+"""
+
+
 INSERT_SQL = f"""
 INSERT INTO memories
 (
@@ -629,6 +689,62 @@ class MemoryRepository:
             for row in rows
         ]
 
+    async def search_across_companies(
+        self,
+        *,
+        company_ids: Sequence[UUID],
+        query: str,
+        k: int = 20,
+        types: Sequence[MemoryType] | None = None,
+        since: datetime | None = None,
+    ) -> list[MemoryHit]:
+        """Search only the explicitly supplied company allowlist."""
+
+        if self.embedding_service is None:
+            raise RuntimeError(
+                "An embedding service is required for memory search"
+            )
+
+        if not company_ids:
+            raise ValueError("At least one company ID is required")
+
+        if not query.strip():
+            raise ValueError("Search query must not be empty")
+
+        if k <= 0:
+            raise ValueError("Search result count must be positive")
+
+        query_embedding = await self.embedding_service.generate_embedding(
+            query
+        )
+
+        if len(query_embedding) != EMBEDDING_DIMENSION:
+            raise ValueError(
+                f"Expected embedding dimension "
+                f"{EMBEDDING_DIMENSION}, "
+                f"received {len(query_embedding)}"
+            )
+
+        query_vector = to_vector_literal(query_embedding)
+        candidate_limit = max(50, k * 10)
+        normalized_types = list(types) if types else None
+
+        async with database.pool.acquire() as connection:
+            rows = await connection.fetch(
+                CROSS_COMPANY_SEARCH_SQL,
+                list(company_ids),
+                query_vector,
+                candidate_limit,
+                normalized_types,
+                since,
+                k,
+            )
+
+        return [
+            self._to_memory_hit(row)
+            for row in rows
+        ]
+
     async def recent(
         self,
         *,
@@ -803,4 +919,3 @@ class MemoryRepository:
 
 
         return result == 1
-    
