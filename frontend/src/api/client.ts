@@ -50,9 +50,20 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}) {
     )
   }
 
+  // 204 responses carry no body, but FastAPI still sends
+  // `content-type: application/json`, so a content-type check alone is not
+  // enough -- calling .json() on an empty body throws "Unexpected end of
+  // JSON input", and that exception propagates out of whatever caller was
+  // awaiting it. POST /api/auth/logout returns 204, which is why signing out
+  // silently failed: the navigate() after it never ran.
+  //
+  // Guard on status first, then treat an unparseable body as "no payload"
+  // rather than an error. Any endpoint that legitimately returns nothing
+  // should not be able to break a caller.
   const contentType = response.headers.get("content-type") || ""
-  const payload = contentType.includes("application/json")
-    ? await response.json()
+  const hasBody = response.status !== 204 && response.status !== 205
+  const payload = hasBody && contentType.includes("application/json")
+    ? await response.json().catch(() => null)
     : null
 
   if (!response.ok) {

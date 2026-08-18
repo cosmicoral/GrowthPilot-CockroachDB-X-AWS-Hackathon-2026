@@ -129,7 +129,7 @@ export default function DashboardLayout() {
         zIndex: 0,
         pointerEvents: "none",
         backgroundColor: "rgba(239,244,255,0.8)",
-        backgroundImage: `linear-gradient(to bottom, rgba(13,30,65,0.42) 0%, rgba(22,52,108,0.22) 50%, rgba(13,30,65,0.38) 100%), url(https://images.unsplash.com/photo-1511747779856-fd751a79aa22?w=3840&q=100&fit=crop&auto=format)`,
+        backgroundImage: `linear-gradient(to bottom, rgba(13,30,65,0.20) 0%, rgba(22,52,108,0.10) 50%, rgba(13,30,65,0.24) 100%), url(https://images.unsplash.com/photo-1511747779856-fd751a79aa22?w=3840&q=100&fit=crop&auto=format)`,
         backgroundSize: "cover",
         backgroundPosition: "center center",
         backgroundRepeat: "no-repeat",
@@ -140,7 +140,7 @@ export default function DashboardLayout() {
 
         {/* ── Floating top header (unchanged) ── */}
         <header style={{
-          background: "rgba(255,255,255,0.64)",
+          background: "rgba(255,255,255,0.92)",
           backdropFilter: "blur(16px)",
           border: "1px solid rgba(255,255,255,0.82)",
           borderRadius: 18,

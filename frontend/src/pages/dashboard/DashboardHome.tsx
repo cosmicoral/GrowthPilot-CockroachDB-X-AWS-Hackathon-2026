@@ -12,7 +12,7 @@ import { getResearchMemories } from "@/api/research"
 import { getAgentTraces, type AgentTrace } from "@/api/traces"
 
 const card: CSSProperties = {
-  background: "rgba(255,255,255,0.58)",
+  background: "rgba(255,255,255,0.93)",
   border: "1.5px solid rgba(255,255,255,0.7)",
   borderRadius: 16,
   padding: 20,
