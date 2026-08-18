@@ -624,6 +624,38 @@ Generation runs.
 
 ---
 
+# 🧩 Agent Skills
+
+GrowthPilot supports reusable Agent Skills through local `SKILL.md` files.
+
+Skills are stored under:
+
+    backend/agents/skills/
+    ├── loader.py
+    └── campaign_analysis/
+        └── SKILL.md
+
+Each skill contains YAML-style frontmatter with a name and description,
+followed by reusable instructions for an agent.
+
+The `SkillLoader` discovers available skills and loads a skill by name.
+`AgentContext` provides the loader to agents so individual agents can
+reuse shared instructions without hardcoding them into their prompts.
+
+For example, the Analytics & Reflection Agent loads the
+`campaign_analysis` skill before generating its reflection.
+
+## Adding a new skill
+
+1. Create a directory under `backend/agents/skills/`.
+2. Add a `SKILL.md` file with `name` and `description` frontmatter.
+3. Add the reusable instructions below the frontmatter.
+4. Load the skill from the agent through `context.skill_loader`.
+
+Missing or invalid skills are handled gracefully by the loader.
+
+---
+
 # 🗺️ Future Roadmap
 
 ## Phase 1

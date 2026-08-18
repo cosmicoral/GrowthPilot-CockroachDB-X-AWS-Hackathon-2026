@@ -223,6 +223,7 @@ class AnalyticsReflectionAgent(Agent):
         post_count: int,
         groups: list[GroupPerformance],
         best_group: str,
+        skill_instructions: str,
     ) -> str:
         """Build the reflection prompt from deterministic analysis results."""
 
@@ -238,6 +239,9 @@ class AnalyticsReflectionAgent(Agent):
         }
 
         return (
+            "Use the following reusable GrowthPilot skill instructions "
+            "when analyzing the campaign data:\n\n"
+            f"{skill_instructions}\n\n"
             "Turn the following deterministic performance analysis into "
             "a concise plain-language reflection.\n\n"
             f"{json.dumps(analysis, indent=2, sort_keys=True)}\n\n"
@@ -340,11 +344,21 @@ class AnalyticsReflectionAgent(Agent):
         best_group_performance = ranked_groups[0]
         best_group = best_group_performance.group_name
 
+        campaign_analysis_skill = self.context.skill_loader.load(
+            "campaign_analysis"
+        )
+
+        if campaign_analysis_skill is None:
+            raise ValueError(
+                "Required campaign-analysis skill is unavailable"
+            )
+
         prompt = self._build_prompt(
             group_by=normalized_group_by,
             post_count=len(posts),
             groups=groups,
             best_group=best_group,
+            skill_instructions=campaign_analysis_skill.instructions,
         )
 
         reflection = await self.context.bedrock_client.generate_text(
