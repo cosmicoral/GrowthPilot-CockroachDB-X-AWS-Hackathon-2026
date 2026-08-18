@@ -62,8 +62,7 @@ def test_search_memories_empty_query(mock_repo_class):
     mock_repo_class.return_value.search = AsyncMock(return_value=[])
 
     try:
-        # response = client.post(
-        client.post(
+        response = client.post(
             "/api/memory/search",
             json={
                 "query": "",
@@ -71,8 +70,7 @@ def test_search_memories_empty_query(mock_repo_class):
             },
         )
 
-        # assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-        pass
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     finally:
         app.dependency_overrides.clear()
@@ -85,8 +83,7 @@ def test_search_memories_invalid_k(mock_repo_class):
     mock_repo_class.return_value.search = AsyncMock(return_value=[])
 
     try:
-        # response = client.post(
-        client.post(
+        response = client.post(
             "/api/memory/search",
             json={
                 "query": "test",
@@ -94,8 +91,43 @@ def test_search_memories_invalid_k(mock_repo_class):
             },
         )
 
-        # assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-        pass
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    finally:
+        app.dependency_overrides.clear()
+
+@patch("backend.api.memory.MemoryRepository")
+def test_search_memories_uses_authenticated_company(
+    mock_repo_class,
+):
+    company_id = uuid4()
+
+    app.dependency_overrides[get_current_company_id] = (
+        lambda: company_id
+    )
+
+    mock_repo_instance = AsyncMock()
+    mock_repo_class.return_value = mock_repo_instance
+    mock_repo_instance.search.return_value = []
+
+    try:
+        response = client.post(
+            "/api/memory/search",
+            json={
+                "query": "campaign performance",
+                "k": 5,
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        mock_repo_instance.search.assert_awaited_once_with(
+            company_id=company_id,
+            query="campaign performance",
+            k=5,
+            types=None,
+            since=None,
+        )
 
     finally:
         app.dependency_overrides.clear()

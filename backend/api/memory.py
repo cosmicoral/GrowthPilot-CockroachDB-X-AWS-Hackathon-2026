@@ -3,7 +3,7 @@ from typing import Sequence
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.api.deps import get_current_company_id
 from backend.llm.client import BedrockClient
@@ -15,8 +15,8 @@ router = APIRouter(prefix="/api/memory", tags=["Memory"])
 
 
 class MemorySearchRequest(BaseModel):
-    query: str
-    k: int = 8
+    query: str = Field(min_length=1)
+    k: int = Field(ge=1, le=50)
     types: Sequence[MemoryType] | None = None
     since: datetime | None = None
 
