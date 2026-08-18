@@ -8,7 +8,6 @@ from backend.api.deps import get_current_company_id
 from backend.api.growthgraph import router as growthgraph_router
 from backend.memory.store import MemoryHit
 
-
 app = FastAPI()
 app.include_router(growthgraph_router)
 client = TestClient(app)

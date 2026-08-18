@@ -8,8 +8,7 @@ from backend.api.deps import get_current_company_id
 from backend.llm.client import BedrockClient
 from backend.memory.embedding import BedrockEmbeddingService
 from backend.memory.repository import MemoryRepository
-from backend.memory.store import MemoryHit, MemoryType
-
+from backend.memory.store import MemoryType
 
 router = APIRouter(
     prefix="/api/growthgraph",

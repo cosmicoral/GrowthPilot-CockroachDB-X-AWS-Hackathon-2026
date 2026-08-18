@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 import sys
+from pathlib import Path
 from uuid import UUID, uuid5
 
 import httpx
@@ -14,7 +14,6 @@ sys.path.insert(0, str(ROOT_DIR))
 from backend.api.auth import create_session_token
 from backend.database.database import database
 from backend.main import app
-
 
 SEED_NAMESPACE = UUID(
     "f2f5f2a0-6b8b-4b8e-9f4b-9d3f6b1c2e40"

@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 from uuid import UUID, uuid5
 
-
 # ---------------------------------------------------------------------------
 # Project import path
 #
@@ -24,7 +23,6 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from backend.database.database import database
-
 
 # ---------------------------------------------------------------------------
 # Configuration

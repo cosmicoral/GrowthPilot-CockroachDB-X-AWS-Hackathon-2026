@@ -33,7 +33,6 @@ sys.path.insert(0, str(ROOT_DIR))
 from backend.database.database import database  # noqa: E402
 from backend.memory.hash import create_content_hash  # noqa: E402
 
-
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
