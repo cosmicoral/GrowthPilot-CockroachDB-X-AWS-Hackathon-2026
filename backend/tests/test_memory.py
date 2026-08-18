@@ -9,7 +9,6 @@ from backend.api.deps import get_current_company_id
 from backend.api.memory import router as memory_router
 from backend.memory.store import MemoryHit
 
-
 app = FastAPI()
 app.include_router(memory_router)
 client = TestClient(app)
