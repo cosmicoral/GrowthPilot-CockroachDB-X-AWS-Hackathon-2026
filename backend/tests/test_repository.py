@@ -13,6 +13,30 @@ from backend.memory.store import MemoryHit
 # ---------------------------------------------------------------------------
 
 
+class DrainingConnectionMixin:
+    """Gives fake connections the fetch() method the repository now calls.
+
+    backend/memory/repository.py drains result portals with connection.fetch()
+    instead of fetchval()/fetchrow() -- see _drained_row there for why
+    CockroachDB v26.2 forces that. These doubles were written against the old
+    API, so fetch() is derived from the query branching each test already
+    defines rather than duplicating it.
+
+    Dispatch mirrors production: the semantic-duplicate lookup is the only
+    statement read as a row, everything else as a single value.
+    """
+
+    async def fetch(self, query, *args):
+        if "embedding <=>" in query and hasattr(self, "fetchrow"):
+            row = await self.fetchrow(query, *args)
+
+            return [row] if row is not None else []
+
+        value = await self.fetchval(query, *args)
+
+        return [[value]] if value is not None else []
+
+
 class MockSaveTransaction:
     async def __aenter__(self):
         return self
@@ -21,7 +45,7 @@ class MockSaveTransaction:
         return False
 
 
-class MockConnection:
+class MockConnection(DrainingConnectionMixin):
     """
     Fake database connection used by save_memory tests.
     """
@@ -133,7 +157,7 @@ async def test_save_memories_batch_returns_existing_id_on_conflict(
 
     existing_id = uuid4()
 
-    class ConflictConnection:
+    class ConflictConnection(DrainingConnectionMixin):
         async def fetchval(self, query, *args):
             if "INSERT INTO memories" in query:
                 return None
@@ -195,7 +219,7 @@ async def test_save_memories_batch_handles_insert_and_conflict(
     inserted_id = uuid4()
     existing_id = uuid4()
 
-    class MixedConnection:
+    class MixedConnection(DrainingConnectionMixin):
         def __init__(self):
             self.insert_calls = 0
 
@@ -289,7 +313,7 @@ async def test_save_memories_batch_merges_semantically_similar_memory(
 
     existing_id = uuid4()
 
-    class SemanticConnection:
+    class SemanticConnection(DrainingConnectionMixin):
 
         def transaction(self):
             return MockSaveTransaction()
@@ -380,7 +404,7 @@ async def test_save_memories_batch_semantic_merge_keeps_higher_importance(
 
     captured_args = {}
 
-    class ImportanceConnection:
+    class ImportanceConnection(DrainingConnectionMixin):
 
         def transaction(self):
             return MockSaveTransaction()
@@ -470,7 +494,7 @@ async def test_save_memories_batch_semantic_dedup_is_company_scoped(monkeypatch)
 
     inserted_id = uuid4()
 
-    class CompanyScopedConnection:
+    class CompanyScopedConnection(DrainingConnectionMixin):
 
         def transaction(self):
             return MockSaveTransaction()
@@ -546,7 +570,7 @@ async def test_save_memories_batch_semantic_merge_retries_transaction(
     attempts = 0
 
 
-    class RetryConnection:
+    class RetryConnection(DrainingConnectionMixin):
 
         def transaction(self):
             return MockSaveTransaction()
@@ -635,7 +659,7 @@ async def test_save_memories_batch_inserts_when_similarity_is_below_threshold(
     inserted_id = uuid4()
 
 
-    class LowSimilarityConnection:
+    class LowSimilarityConnection(DrainingConnectionMixin):
         def transaction(self):
             return MockSaveTransaction()
 
@@ -926,7 +950,7 @@ class RecordingEmbeddingService:
         return create_test_embedding()
 
 
-class MockWriteConnection:
+class MockWriteConnection(DrainingConnectionMixin):
     def __init__(self, *, existing_id, events):
         self.existing_id = existing_id
         self.events = events
@@ -1005,7 +1029,7 @@ async def test_write_merges_semantically_similar_memory(monkeypatch):
 
     existing_id = uuid4()
 
-    class MergeConnection:
+    class MergeConnection(DrainingConnectionMixin):
         def transaction(self):
             return MockSaveTransaction()
 
@@ -1069,7 +1093,7 @@ async def test_save_memory_merges_semantically_similar_memory(monkeypatch):
 
     existing_id = uuid4()
 
-    class MergeConnection:
+    class MergeConnection(DrainingConnectionMixin):
         def transaction(self):
             return MockSaveTransaction()
 
@@ -1231,7 +1255,7 @@ async def test_merge_memory(monkeypatch):
 
     memory_id = uuid4()
 
-    class MergeConnection:
+    class MergeConnection(DrainingConnectionMixin):
         async def fetchval(self, query, *args):
             assert "UPDATE memories" in query
             return memory_id
