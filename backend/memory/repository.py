@@ -241,6 +241,50 @@ ORDER BY created_at DESC
 LIMIT $3
 """
 
+async def _drained_row(connection: asyncpg.Connection, query: str, *args):
+    """Run a query and fully drain its result set, returning the first row.
+
+    Why this exists instead of connection.fetchrow():
+
+    asyncpg's fetchrow()/fetchval() bind a portal with a row limit of 1 and
+    stop reading. The server has no way to know the client is finished, so
+    the portal stays suspended. CockroachDB v26.2 then rejects the next
+    statement on that connection with either:
+
+        cannot perform operation sql.BindStmt while a different portal is open
+
+    or, once multiple_active_portals_enabled is on:
+
+        the statement for a pausable portal must be a read-only SELECT query
+        with no sub-queries or post-queries
+
+    The second one is worse, because it also rules out INSERT ... RETURNING
+    and any CTE query -- which is most of this module. Enabling the preview
+    setting therefore trades one failure for a narrower but still fatal one.
+
+    fetch() binds with no row limit, so the result set is drained and the
+    portal closes before the call returns. Sequential statements inside one
+    transaction are then safe with no session settings and no preview
+    features. Every statement in the _save_or_merge_memory path returns at
+    most one row, so draining costs nothing.
+    """
+
+    rows = await connection.fetch(query, *args)
+
+    return rows[0] if rows else None
+
+
+async def _drained_value(connection: asyncpg.Connection, query: str, *args):
+    """First column of the first row, with the portal fully drained.
+
+    See _drained_row for why fetchval() cannot be used here.
+    """
+
+    row = await _drained_row(connection, query, *args)
+
+    return row[0] if row is not None else None
+
+
 class MemoryRepository:
     def __init__(self, embedding_service=None):
         self.embedding_service = embedding_service
@@ -266,7 +310,8 @@ class MemoryRepository:
 
         embedding_vector = to_vector_literal(embedding)
 
-        memory_id = await connection.fetchval(
+        memory_id = await _drained_value(
+            connection,
             INSERT_SQL,
             company_id,
             memory_type,
@@ -280,7 +325,8 @@ class MemoryRepository:
         if memory_id is not None:
             return memory_id
 
-        return await connection.fetchval(
+        return await _drained_value(
+            connection,
             SELECT_BY_HASH_SQL,
             company_id,
             content_hash
@@ -300,7 +346,8 @@ class MemoryRepository:
 
         embedding_vector = to_vector_literal(embedding)
 
-        return await connection.fetchrow(
+        return await _drained_row(
+            connection,
             FIND_SIMILAR_MEMORY_SQL,
             company_id,
             embedding_vector
@@ -320,7 +367,8 @@ class MemoryRepository:
         Update an existing memory with new information.
         """
 
-        return await connection.fetchval(
+        return await _drained_value(
+            connection,
             MERGE_MEMORY_SQL,
             company_id,
             memory_id,
@@ -339,7 +387,8 @@ class MemoryRepository:
         semantically similar memory.
         """
 
-        existing_id = await connection.fetchval(
+        existing_id = await _drained_value(
+            connection,
             SELECT_BY_HASH_SQL,
             memory["company_id"],
             memory["content_hash"]

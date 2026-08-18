@@ -40,25 +40,22 @@ async def _init_connection(conn: asyncpg.Connection) -> None:
         schema="pg_catalog",
     )
 
+    # No multiple_active_portals_enabled here, deliberately.
+    #
     # CockroachDB v26.2 rejects a second statement on a connection while an
-    # earlier result portal is still open:
+    # earlier result portal is still open. Enabling that preview setting looks
+    # like the fix -- it is what the error message suggests -- but it only
+    # swaps one failure for another: with it on, a suspended portal must be a
+    # "pausable" portal, and those are restricted to read-only SELECTs with no
+    # sub-queries. That rules out INSERT ... RETURNING and every CTE query in
+    # backend/memory/repository.py, so the memory write path still fails, just
+    # with a less obvious error.
     #
-    #   unimplemented: multiple active portals is in preview, please set
-    #   session variable multiple_active_portals_enabled to true
-    #
-    # asyncpg's fetchval/fetchrow bind a portal with a row limit rather than
-    # draining the result, so the portal stays suspended. Any code path that
-    # runs several statements inside one transaction hits this -- including
-    # _save_or_merge_memory, which checks the content hash, looks for a
-    # semantic duplicate, then inserts. That is every memory write in the
-    # system, not an edge case.
-    #
-    # Enabling the session variable is CockroachDB's own suggested remedy and
-    # is applied here so it covers every pooled connection uniformly. The
-    # narrower alternative is to replace fetchrow/fetchval with fetch() in
-    # the repository so each result set is fully drained; that avoids relying
-    # on a preview feature and is the better long-term fix.
-    await conn.execute("SET multiple_active_portals_enabled = true")
+    # The actual fix is to never leave a portal suspended: see _drained_row /
+    # _drained_value in backend/memory/repository.py, which use fetch()
+    # (no row limit, result set drained, portal closed) instead of
+    # fetchrow()/fetchval() (row limit 1, portal left open). With those in
+    # place no session setting is needed and no preview feature is relied on.
 
 
 class Database:
