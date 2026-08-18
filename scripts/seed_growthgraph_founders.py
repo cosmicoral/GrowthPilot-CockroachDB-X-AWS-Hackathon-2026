@@ -1,26 +1,63 @@
-"""Seed deterministic synthetic GrowthGraph founders for T35.
+"""Seed synthetic GrowthGraph founders (T35).
 
-This script intentionally does NOT use AWS Bedrock.
+GrowthGraph (T36) is a cross-tenant, anonymised aggregate query over the
+`memories` table. T13's demo seed gives us exactly one company, which is
+enough to test the single-founder loop but useless for proving a
+cross-tenant query actually aggregates across tenants. This script seeds a
+larger synthetic cohort so T36 has something real to query against.
 
-It creates:
-    - 75 deterministic synthetic companies
-    - 5 memories per company
-    - deterministic local VECTOR(1024) embeddings
+Design decisions worth recording (the "why", not just the "what"):
 
-The data is intended for testing T36's cross-company GrowthGraph query.
+1. Content is template-generated with `random.Random`, not one Bedrock
+   text-generation call per founder. Only *embeddings* need to come from
+   Bedrock -- the memory content itself just needs to be varied and
+   plausible, not creative. This keeps the script fast, free to re-run,
+   and deterministic.
+
+2. Every random choice is seeded from the founder's index (see
+   `_rng_for_founder`), not from wall-clock time. Re-running the script
+   regenerates the exact same companies and memory content every time.
+   Combined with the dedup path already built into
+   `MemoryRepository._save_or_merge_memory()` (content_hash + semantic
+   similarity), reruns are idempotent: no duplicate rows, no duplicate
+   Bedrock embedding calls for content that's already stored.
+
+3. `company_id` is a UUID5 derived from a fixed namespace + founder index
+   (`derive_company_id`), not `gen_random_uuid()`. That means the whole
+   cohort's ids are reproducible from the index alone -- no manifest file
+   needed for T36 or for `--cleanup` to find "our" synthetic companies
+   again later.
+
+4. Each founder is written atomically in its own transaction: the company
+   upsert, all memory inserts/merges, and timestamp updates either all
+   commit or all roll back. CockroachDB is SERIALIZABLE by default, so a write
+   conflict aborts the *whole* transaction and it has to be retried from
+   scratch (see `backend/database/database.py::with_retry`). Seventy-five
+   founders' worth of inserts in a single transaction would make every
+   retry expensive and hold one long-lived transaction open the whole
+   run. Per-founder batches keep each transaction small and each retry
+   cheap -- and it matches how a real agent would actually write (one
+   founder's memories at a time), not an artefact of seeding in bulk.
+
+5. Embeddings are generated once per founder via
+   `BedrockEmbeddingService.generate_embeddings()` (T9's batching path),
+   and only for memories whose content_hash isn't already in the table --
+   `get_by_content_hash()` is checked first so reruns don't re-pay for
+   embeddings on content that's already persisted.
 
 Usage:
     python scripts/seed_growthgraph_founders.py
-    python scripts/seed_growthgraph_founders.py --count 75
+    python scripts/seed_growthgraph_founders.py --count 100
     python scripts/seed_growthgraph_founders.py --cleanup
+
+`--cleanup` always removes the entire deterministic T35 UUID range, regardless
+of how many founders were seeded on the most recent run.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
-import hashlib
-import json
 import random
 import sys
 from datetime import datetime, timedelta, timezone
@@ -30,25 +67,19 @@ from uuid import UUID, uuid5
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from backend.database.database import database  # noqa: E402
+from backend.database.database import database, run_in_txn  # noqa: E402
+from backend.llm.client import BedrockClient  # noqa: E402
+from backend.memory.embedding import BedrockEmbeddingService  # noqa: E402
 from backend.memory.hash import create_content_hash  # noqa: E402
+from backend.memory.repository import MemoryRepository  # noqa: E402
 
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
+# Fixed, non-secret constant. Only used to seed UUID5 / random.Random so
+# the synthetic cohort is reproducible across runs -- not a credential.
 SEED_NAMESPACE = UUID("f2f5f2a0-6b8b-4b8e-9f4b-9d3f6b1c2e40")
 
 DEFAULT_FOUNDER_COUNT = 75
 MIN_FOUNDER_COUNT = 50
 MAX_FOUNDER_COUNT = 100
-
-EMBEDDING_DIMENSION = 1024
-
-
-# ---------------------------------------------------------------------------
-# Synthetic data
-# ---------------------------------------------------------------------------
 
 INDUSTRIES = [
     "B2B SaaS / DevTools",
@@ -74,12 +105,7 @@ ICPS = [
     "property managers overseeing five to twenty units",
 ]
 
-CHANNELS = [
-    "linkedin",
-    "twitter",
-    "newsletter",
-    "blog",
-]
+CHANNELS = ["linkedin", "twitter", "newsletter", "blog"]
 
 THEMES = [
     "product_education",
@@ -98,148 +124,36 @@ MESSAGING_ANGLES = [
 ]
 
 FOUNDER_NAMES = [
-    "Priya",
-    "Jordan",
-    "Aisha",
-    "Mateo",
-    "Nina",
-    "Kwame",
-    "Elena",
-    "Sam",
-    "Noor",
-    "Diego",
-    "Freya",
-    "Tariq",
-    "Lucia",
-    "Owen",
-    "Yuki",
-    "Iris",
-    "Rafael",
-    "Mei",
-    "Hassan",
-    "Sofia",
-    "Kenji",
-    "Amara",
-    "Leo",
-    "Zara",
-    "Felix",
-    "Ingrid",
-    "Omar",
-    "Chiara",
-    "Viktor",
-    "Aaliyah",
+    "Priya", "Jordan", "Aisha", "Mateo", "Nina", "Kwame", "Elena", "Sam",
+    "Noor", "Diego", "Freya", "Tariq", "Lucia", "Owen", "Yuki", "Iris",
+    "Rafael", "Mei", "Hassan", "Sofia", "Kenji", "Amara", "Leo", "Zara",
+    "Felix", "Ingrid", "Omar", "Chiara", "Viktor", "Aaliyah",
 ]
 
 CONTENT_TITLE_TEMPLATES = {
     "product_education": "How {icp_short} actually use {product}",
     "founder_story": "Why I started {company} for {icp_short}",
-    "customer_case_study": (
-        "How one {icp_short} team cut wasted work with {product}"
-    ),
-    "industry_trend": (
-        "What's changing for {icp_short} in {industry_short}"
-    ),
-    "tactical_howto": (
-        "{n} ways {icp_short} can save time this week"
-    ),
-    "pricing_positioning": (
-        "Why we priced {product} the way we did"
-    ),
+    "customer_case_study": "How one {icp_short} team cut wasted work with {product}",
+    "industry_trend": "What's changing for {icp_short} in {industry_short}",
+    "tactical_howto": "{n} ways {icp_short} can save time this week",
+    "pricing_positioning": "Why we priced {product} the way we did",
 }
 
 
-# ---------------------------------------------------------------------------
-# Deterministic IDs
-# ---------------------------------------------------------------------------
-
 def derive_company_id(index: int) -> UUID:
-    """Return the deterministic UUID for synthetic founder `index`."""
+    """Deterministic company_id for founder `index`.
 
-    return uuid5(
-        SEED_NAMESPACE,
-        f"growthgraph-synthetic-founder-{index}",
-    )
-
-
-def derive_memory_id(company_id: UUID, memory_index: int) -> UUID:
-    """Return a deterministic UUID for a synthetic memory."""
-
-    return uuid5(
-        company_id,
-        f"growthgraph-memory-{memory_index}",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Deterministic vectors
-# ---------------------------------------------------------------------------
-
-def deterministic_embedding(text: str) -> list[float]:
-    """Create a deterministic local VECTOR(1024).
-
-    This is NOT an ML embedding.
-
-    It exists solely so the synthetic test data contains valid
-    VECTOR(1024) values without requiring AWS Bedrock.
+    UUID5 of the fixed namespace + index -- same input always produces the
+    same id, so the cohort never needs a manifest file to be found again.
     """
 
-    values: list[float] = []
+    return uuid5(SEED_NAMESPACE, f"growthgraph-synthetic-founder-{index}")
 
-    seed = text.encode("utf-8")
-
-    # SHA-256 gives 32 bytes per digest.
-    # 32 * 32 = 1024 deterministic values.
-    for block_index in range(32):
-        digest = hashlib.sha256(
-            seed + block_index.to_bytes(4, "big")
-        ).digest()
-
-        for byte in digest:
-            # Map [0, 255] -> approximately [-1.0, 1.0].
-            value = (byte / 127.5) - 1.0
-            values.append(value)
-
-    if len(values) != EMBEDDING_DIMENSION:
-        raise RuntimeError(
-            f"Expected {EMBEDDING_DIMENSION} vector values, "
-            f"got {len(values)}"
-        )
-
-    # Normalize the vector.
-    magnitude = sum(value * value for value in values) ** 0.5
-
-    if magnitude == 0:
-        raise RuntimeError("Generated zero-length vector")
-
-    return [
-        value / magnitude
-        for value in values
-    ]
-
-
-def to_vector_literal(vector: list[float]) -> str:
-    """Convert a vector to CockroachDB vector literal format."""
-
-    if len(vector) != EMBEDDING_DIMENSION:
-        raise ValueError(
-            f"Expected {EMBEDDING_DIMENSION} dimensions, "
-            f"got {len(vector)}"
-        )
-
-    return "[" + ",".join(
-        f"{value:.8f}"
-        for value in vector
-    ) + "]"
-
-
-# ---------------------------------------------------------------------------
-# Synthetic founder generation
-# ---------------------------------------------------------------------------
 
 def _rng_for_founder(index: int) -> random.Random:
-    return random.Random(
-        f"growthgraph-founder-seed-{index}"
-    )
+    """Seed a Random instance from the founder index, not wall-clock time."""
+
+    return random.Random(f"growthgraph-founder-seed-{index}")
 
 
 def _short(text: str) -> str:
@@ -247,176 +161,116 @@ def _short(text: str) -> str:
 
 
 def generate_founder(index: int) -> dict:
-    """Generate one deterministic synthetic company and five memories."""
+    """Build one synthetic founder: company row + list of memory dicts."""
 
     rng = _rng_for_founder(index)
 
     name = rng.choice(FOUNDER_NAMES)
     industry = rng.choice(INDUSTRIES)
     icp = rng.choice(ICPS)
-
-    product = (
-        f"{name}'s "
-        f"{industry.split(' / ')[-1]} tool"
-    )
-
-    company_name = (
-        f"{name} — "
-        f"{industry.split(' / ')[-1]} #{index}"
-    )
-
+    product = f"{name}'s {industry.split(' / ')[-1]} tool"
+    company_name = f"{name} — {industry.split(' / ')[-1]} #{index}"
     company_id = derive_company_id(index)
 
+    # Stagger "signup" age so companies aren't all the same vintage --
+    # matters for T36 since a real cohort wouldn't all onboard on day 0.
     founder_age_days = rng.randint(3, 60)
 
-    memories: list[dict] = []
+    memories = []
 
-    # ---------------------------------------------------------------
-    # Memory 1: user positioning
-    # ---------------------------------------------------------------
+    memories.append({
+        "memory_type": "user",
+        "content": (
+            f"{name}'s initial positioning is to help {icp} "
+            f"reduce manual work and make faster decisions using "
+            f"{product}."
+        ),
+        "metadata": {
+            "source": "research-agent",
+            "founder": name,
+            "stage": "week-1",
+            "synthetic": True,
+        },
+        "importance": round(rng.uniform(0.6, 0.85), 2),
+        "age_days": founder_age_days,
+    })
 
-    memories.append(
-        {
-            "memory_type": "user",
-            "content": (
-                f"{name}'s initial positioning is to help "
-                f"{icp} reduce manual work and make faster "
-                f"decisions using {product}."
-            ),
-            "metadata": {
-                "source": "research-agent",
-                "founder": name,
-                "stage": "week-1",
-                "synthetic": True,
-            },
-            "importance": round(
-                rng.uniform(0.60, 0.85),
-                2,
-            ),
-            "age_days": founder_age_days,
-        }
-    )
+    memories.append({
+        "memory_type": "semantic",
+        "content": (
+            f"{name}'s ICP hypothesis is {icp}. These teams are likely to "
+            f"feel friction from manual coordination and inconsistent "
+            f"processes, which {product} is meant to remove."
+        ),
+        "metadata": {
+            "source": "research-agent",
+            "founder": name,
+            "stage": "week-1",
+            "synthetic": True,
+        },
+        "importance": round(rng.uniform(0.65, 0.9), 2),
+        "age_days": founder_age_days,
+    })
 
-    # ---------------------------------------------------------------
-    # Memory 2: semantic ICP hypothesis
-    # ---------------------------------------------------------------
-
-    memories.append(
-        {
-            "memory_type": "semantic",
-            "content": (
-                f"{name}'s ICP hypothesis is {icp}. "
-                f"These teams are likely to feel friction from "
-                f"manual coordination and inconsistent processes, "
-                f"which {product} is meant to remove."
-            ),
-            "metadata": {
-                "source": "research-agent",
-                "founder": name,
-                "stage": "week-1",
-                "synthetic": True,
-            },
-            "importance": round(
-                rng.uniform(0.65, 0.90),
-                2,
-            ),
-            "age_days": founder_age_days,
-        }
-    )
-
-    # ---------------------------------------------------------------
-    # Memories 3-4: content performance
-    # ---------------------------------------------------------------
-
+    # Two published content pieces, varied theme/channel/angle/engagement.
     for post_index in range(2):
         theme = rng.choice(THEMES)
         channel = rng.choice(CHANNELS)
         angle = rng.choice(MESSAGING_ANGLES)
-
         title = CONTENT_TITLE_TEMPLATES[theme].format(
             icp_short=_short(icp),
             product=product,
-            company=name,
+            company=company_name.split(" — ")[0],
             industry_short=industry.split(" / ")[-1],
             n=rng.choice([3, 4, 5]),
         )
-
         likes = rng.randint(2, 80)
-        comments = rng.randint(
-            0,
-            max(1, likes // 5),
-        )
-        clicks = rng.randint(
-            0,
-            max(1, likes // 3),
-        )
+        comments = rng.randint(0, max(1, likes // 5))
+        clicks = rng.randint(0, max(1, likes // 3))
 
-        memories.append(
-            {
-                "memory_type": "episodic",
-                "content": (
-                    f"{name} published a {channel} post "
-                    f'titled "{title}". '
-                    f"The post targeted {icp} with a "
-                    f"{angle.replace('_', ' ')} angle."
-                ),
-                "metadata": {
-                    "source": "content-agent",
-                    "founder": name,
-                    "channel": channel,
-                    "status": "published",
-                    "synthetic": True,
-                    "theme": theme,
-                    "messaging_angle": angle,
-                    "engagement": {
-                        "likes": likes,
-                        "comments": comments,
-                        "clicks": clicks,
-                    },
-                },
-                "importance": round(
-                    rng.uniform(0.50, 0.95),
-                    2,
-                ),
-                "age_days": max(
-                    1,
-                    founder_age_days
-                    - rng.randint(
-                        1,
-                        founder_age_days,
-                    ),
-                ),
-            }
-        )
-
-    # ---------------------------------------------------------------
-    # Memory 5: recent reflection
-    # ---------------------------------------------------------------
-
-    best_theme = rng.choice(THEMES)
-
-    memories.append(
-        {
-            "memory_type": "reflection",
+        memories.append({
+            "memory_type": "episodic",
             "content": (
-                f"Recent content performance suggests "
-                f"{_short(icp)} respond best to "
-                f"{best_theme.replace('_', ' ')} content. "
-                f"Future posts for {name} should lean into "
-                f"that theme."
+                f"{name} published a {channel} post titled \"{title}\". "
+                f"The post targeted {icp} with a {angle.replace('_', ' ')} "
+                f"angle."
             ),
             "metadata": {
-                "source": "reflection-agent",
+                "source": "content-agent",
                 "founder": name,
+                "channel": channel,
+                "status": "published",
                 "synthetic": True,
+                "theme": theme,
+                "messaging_angle": angle,
+                "engagement": {
+                    "likes": likes,
+                    "comments": comments,
+                    "clicks": clicks,
+                },
             },
-            "importance": round(
-                rng.uniform(0.70, 0.95),
-                2,
-            ),
-            "age_days": 1,
-        }
-    )
+            "importance": round(rng.uniform(0.5, 0.95), 2),
+            "age_days": max(1, founder_age_days - rng.randint(1, founder_age_days)),
+        })
+
+    # Reflection, always the most recent memory for this founder.
+    best_theme = rng.choice(THEMES)
+    memories.append({
+        "memory_type": "reflection",
+        "content": (
+            f"Recent content performance suggests {_short(icp)} respond "
+            f"best to {best_theme.replace('_', ' ')} content. Future posts "
+            f"for {company_name.split(' — ')[0]} should lean into that "
+            f"theme."
+        ),
+        "metadata": {
+            "source": "reflection-agent",
+            "founder": name,
+            "synthetic": True,
+        },
+        "importance": round(rng.uniform(0.7, 0.95), 2),
+        "age_days": max(1, min(m["age_days"] for m in memories) - 1),
+    })
 
     return {
         "company_id": company_id,
@@ -429,25 +283,38 @@ def generate_founder(index: int) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Database helpers
-# ---------------------------------------------------------------------------
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Seed a synthetic cohort of GrowthGraph founders (T35)."
+    )
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=DEFAULT_FOUNDER_COUNT,
+        help=(
+            f"Number of synthetic founders "
+            f"({MIN_FOUNDER_COUNT}-{MAX_FOUNDER_COUNT}, "
+            f"default {DEFAULT_FOUNDER_COUNT})."
+        ),
+    )
+    parser.add_argument(
+        "--cleanup",
+        action="store_true",
+        help="Delete the synthetic cohort's companies and memories.",
+    )
+    args = parser.parse_args()
+    if not MIN_FOUNDER_COUNT <= args.count <= MAX_FOUNDER_COUNT:
+        parser.error(
+            f"--count must be between {MIN_FOUNDER_COUNT} and "
+            f"{MAX_FOUNDER_COUNT} (got {args.count})"
+        )
+    return args
 
-async def seed_company(
-    connection,
-    founder: dict,
-) -> None:
-    """Insert/update one synthetic company."""
 
+async def ensure_company(connection, founder: dict) -> None:
     await connection.execute(
         """
-        INSERT INTO companies (
-            id,
-            name,
-            website,
-            industry,
-            description
-        )
+        INSERT INTO companies (id, name, website, industry, description)
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (id)
         DO UPDATE SET
@@ -463,208 +330,101 @@ async def seed_company(
     )
 
 
-async def seed_memory(
-    connection,
-    company_id: UUID,
-    memory: dict,
-    memory_index: int,
-    seed_time: datetime,
-) -> str:
-    """Insert one deterministic synthetic memory."""
-
-    content = memory["content"]
-
-    content_hash = create_content_hash(content)
-
-    memory_id = derive_memory_id(
-        company_id,
-        memory_index,
-    )
-
-    vector = deterministic_embedding(content)
-
-    vector_literal = to_vector_literal(vector)
-
-    metadata_json = json.dumps(
-        memory["metadata"],
-        separators=(",", ":"),
-    )
-
-    created_at = (
-        seed_time
-        - timedelta(days=memory["age_days"])
-    )
-
-    # Direct SQL only.
-    #
-    # We deliberately do not call MemoryRepository here.
-    # This avoids the CockroachDB v26.2 active-portal problem
-    # encountered by the previous implementation.
-    result = await connection.execute(
-        f"""
-        INSERT INTO memories (
-            id,
-            company_id,
-            memory_type,
-            content,
-            content_hash,
-            metadata,
-            importance,
-            embedding,
-            created_at
-        )
-        VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6::JSONB,
-            $7,
-            $8::VECTOR({EMBEDDING_DIMENSION}),
-            $9
-        )
-        ON CONFLICT (company_id, content_hash)
-        DO UPDATE SET
-            memory_type = excluded.memory_type,
-            metadata = excluded.metadata,
-            importance = excluded.importance,
-            embedding = excluded.embedding,
-            created_at = excluded.created_at
-        """,
-        memory_id,
-        company_id,
-        memory["memory_type"],
-        content,
-        content_hash,
-        metadata_json,
-        memory["importance"],
-        vector_literal,
-        created_at,
-    )
-
-    return result
-
-
-# ---------------------------------------------------------------------------
-# Cohort seeding
-# ---------------------------------------------------------------------------
-
 async def seed_founder(
-    connection,
     founder: dict,
+    repository: MemoryRepository,
+    embedding_service: BedrockEmbeddingService,
     seed_time: datetime,
-) -> int:
-    """Seed one founder directly through SQL."""
+) -> dict:
+    company_id = founder["company_id"]
 
-    await seed_company(
-        connection,
-        founder,
-    )
-
-    memory_count = 0
-
-    for memory_index, memory in enumerate(
-        founder["memories"]
-    ):
-        await seed_memory(
-            connection=connection,
-            company_id=founder["company_id"],
-            memory=memory,
-            memory_index=memory_index,
-            seed_time=seed_time,
+    # Work out which memories are actually new before paying for
+    # embeddings -- reruns should be near-free.
+    prepared_memories = []
+    to_embed: list[str] = []
+    for memory in founder["memories"]:
+        content_hash = create_content_hash(memory["content"])
+        existing_id = await repository.get_by_content_hash(
+            company_id, content_hash,
         )
+        prepared_memory = {
+            **memory,
+            "content_hash": content_hash,
+            "existing_id": existing_id,
+        }
+        prepared_memories.append(prepared_memory)
+        if existing_id is None:
+            to_embed.append(memory["content"])
 
-        memory_count += 1
+    embeddings_by_content = {}
+    if to_embed:
+        vectors = await embedding_service.generate_embeddings(to_embed)
+        embeddings_by_content = dict(zip(to_embed, vectors))
 
-    return memory_count
+    async def save_founder(connection) -> dict:
+        """Persist one founder atomically on the transaction connection."""
 
+        await ensure_company(connection, founder)
 
-async def seed_cohort(count: int) -> None:
-    """Seed the complete deterministic synthetic cohort."""
+        inserted = 0
+        reused = 0
+        for memory in prepared_memories:
+            memory_id = memory["existing_id"]
+            if memory_id is None:
+                memory_id = await repository._save_or_merge_memory(
+                    connection,
+                    {
+                        "company_id": company_id,
+                        "memory_type": memory["memory_type"],
+                        "content": memory["content"],
+                        "content_hash": memory["content_hash"],
+                        "metadata": memory["metadata"],
+                        "importance": memory["importance"],
+                        "embedding": embeddings_by_content[memory["content"]],
+                    },
+                )
+                inserted += 1
+            else:
+                reused += 1
 
-    seed_time = datetime.now(timezone.utc)
-
-    type_counts: dict[str, int] = {}
-    industry_counts: dict[str, int] = {}
-
-    total_memories = 0
-
-    # One normal database connection.
-    #
-    # No nested transaction callbacks.
-    # No repository queries.
-    # No Bedrock calls.
-    async with database.pool.acquire() as connection:
-        for index in range(count):
-            founder = generate_founder(index)
-
-            memory_count = await seed_founder(
-                connection=connection,
-                founder=founder,
-                seed_time=seed_time,
-            )
-
-            total_memories += memory_count
-
-            industry = founder["industry"]
-            industry_counts[industry] = (
-                industry_counts.get(industry, 0) + 1
-            )
-
-            for memory in founder["memories"]:
-                memory_type = memory["memory_type"]
-
-                type_counts[memory_type] = (
-                    type_counts.get(memory_type, 0) + 1
+            if memory_id is None:
+                raise RuntimeError(
+                    f"Memory persistence returned no id for company {company_id}"
                 )
 
-            print(
-                f"[{index + 1:03d}/{count}] "
-                f"{founder['company_name']}: "
-                f"{memory_count} memories"
+            # Backdate created_at so recency-decay ranking has something real
+            # to rank against, same approach as T13's seed_demo_founder.py.
+            created_at = seed_time - timedelta(days=memory["age_days"])
+            await connection.execute(
+                """
+                UPDATE memories
+                SET importance = $3, created_at = $4
+                WHERE company_id = $1 AND id = $2
+                """,
+                company_id,
+                memory_id,
+                memory["importance"],
+                created_at,
             )
 
-    print()
-    print("=" * 70)
-    print("GrowthGraph synthetic cohort seed completed")
-    print("=" * 70)
-    print(f"Founders: {count}")
-    print(f"Memories: {total_memories}")
-    print(f"Vector dimension: {EMBEDDING_DIMENSION}")
-    print("Embedding provider: LOCAL / DETERMINISTIC")
-    print()
-    print("Memory type spread:")
-    for memory_type, amount in sorted(
-        type_counts.items()
-    ):
-        print(f"  {memory_type}: {amount}")
+        return {
+            "company_id": company_id,
+            "inserted": inserted,
+            "reused": reused,
+        }
 
-    print()
-    print("Industry spread:")
-    for industry, amount in sorted(
-        industry_counts.items()
-    ):
-        print(f"  {industry}: {amount}")
+    # Embeddings are intentionally prepared before entering run_in_txn so a
+    # CockroachDB serialization retry never repeats a paid Bedrock call.
+    return await run_in_txn(save_founder)
 
-    print()
-    print("AWS / Bedrock was NOT used.")
-
-
-# ---------------------------------------------------------------------------
-# Cleanup
-# ---------------------------------------------------------------------------
 
 async def cleanup() -> None:
-    """Remove the complete deterministic T35 cohort."""
+    # Always target every UUID this script is capable of creating. Using the
+    # current/default --count would leave rows behind after a larger seed run.
+    company_ids = [derive_company_id(i) for i in range(MAX_FOUNDER_COUNT)]
 
-    company_ids = [
-        derive_company_id(index)
-        for index in range(MAX_FOUNDER_COUNT)
-    ]
-
-    async with database.pool.acquire() as connection:
-        result = await connection.execute(
+    async def delete_cohort(connection):
+        return await connection.execute(
             """
             DELETE FROM companies
             WHERE id = ANY($1::UUID[])
@@ -672,62 +432,51 @@ async def cleanup() -> None:
             company_ids,
         )
 
-    print(
-        f"Cleanup completed for "
-        f"{MAX_FOUNDER_COUNT} possible synthetic companies: "
-        f"{result}"
-    )
+    result = await run_in_txn(delete_cohort)
+    print(f"Cleanup completed for {len(company_ids)} companies: {result}")
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+async def seed_cohort(count: int) -> None:
+    bedrock_client = BedrockClient()
+    embedding_service = BedrockEmbeddingService(bedrock_client)
+    repository = MemoryRepository(embedding_service=embedding_service)
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Seed deterministic synthetic GrowthGraph founders."
+    seed_time = datetime.now(timezone.utc)
+
+    total_inserted = 0
+    total_reused = 0
+    type_counts: dict[str, int] = {}
+    industry_counts: dict[str, int] = {}
+
+    for index in range(count):
+        founder = generate_founder(index)
+        industry_counts[founder["industry"]] = (
+            industry_counts.get(founder["industry"], 0) + 1
         )
-    )
+        for memory in founder["memories"]:
+            type_counts[memory["memory_type"]] = (
+                type_counts.get(memory["memory_type"], 0) + 1
+            )
 
-    parser.add_argument(
-        "--count",
-        type=int,
-        default=DEFAULT_FOUNDER_COUNT,
-        help=(
-            f"Number of founders "
-            f"({MIN_FOUNDER_COUNT}-{MAX_FOUNDER_COUNT}, "
-            f"default={DEFAULT_FOUNDER_COUNT})."
-        ),
-    )
+        result = await seed_founder(
+            founder, repository, embedding_service, seed_time,
+        )
+        total_inserted += result["inserted"]
+        total_reused += result["reused"]
 
-    parser.add_argument(
-        "--cleanup",
-        action="store_true",
-        help=(
-            "Delete the deterministic synthetic GrowthGraph cohort."
-        ),
-    )
-
-    args = parser.parse_args()
-
-    if not (
-        MIN_FOUNDER_COUNT
-        <= args.count
-        <= MAX_FOUNDER_COUNT
-    ):
-        parser.error(
-            f"--count must be between "
-            f"{MIN_FOUNDER_COUNT} and "
-            f"{MAX_FOUNDER_COUNT}"
+        print(
+            f"[{index + 1:03d}/{count}] {founder['company_name']}: "
+            f"inserted={result['inserted']} reused={result['reused']}"
         )
 
-    return args
+    print()
+    print("GrowthGraph synthetic cohort seed completed")
+    print(f"Founders: {count}")
+    print(f"Memories inserted: {total_inserted}")
+    print(f"Memories reused (already present): {total_reused}")
+    print(f"Memory type spread: {type_counts}")
+    print(f"Industry spread: {industry_counts}")
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 async def main() -> None:
     args = parse_args()

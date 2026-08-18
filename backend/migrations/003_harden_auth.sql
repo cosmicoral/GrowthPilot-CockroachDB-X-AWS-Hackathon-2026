@@ -1,21 +1,18 @@
 -- 003_harden_auth.sql — store only one-way session token hashes.
 --
--- Legacy sessions used the UUID `token` column directly.
--- New application code stores only SHA-256 hashes in `token_hash`.
---
--- Existing legacy sessions cannot be converted because the original
--- opaque token is not recoverable. They are therefore invalidated during
--- this migration and users must sign in again.
+-- The legacy UUID primary key remains temporarily so this migration is safe
+-- to apply without rebuilding the shared sessions table. New application code
+-- never exposes that generated UUID and authenticates only by token_hash.
 
-ALTER TABLE sessions
-    ADD COLUMN IF NOT EXISTS token_hash STRING;
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS token_hash STRING;
 
--- Remove legacy sessions that have no hash.
+-- Legacy rows contain only the old UUID token and cannot be authenticated by
+-- the hardened application. Delete them explicitly so deployment has one
+-- predictable transition: existing users sign in again, and every remaining
+-- session uses a one-way token hash.
 DELETE FROM sessions WHERE token_hash IS NULL;
 
--- All remaining sessions must use the hardened token representation.
-ALTER TABLE sessions
-    ALTER COLUMN token_hash SET NOT NULL;
+ALTER TABLE sessions ALTER COLUMN token_hash SET NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_token_hash
     ON sessions (token_hash);

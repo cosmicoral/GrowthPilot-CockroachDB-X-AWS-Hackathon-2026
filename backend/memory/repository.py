@@ -161,6 +161,7 @@ ORDER BY
 LIMIT $6
 """
 
+
 INSERT_SQL = f"""
 INSERT INTO memories
 (
@@ -194,7 +195,6 @@ FROM memories
 WHERE company_id = $1
 AND content_hash = $2
 """
-
 
 FIND_SIMILAR_MEMORY_SQL = f"""
 SELECT
@@ -241,7 +241,6 @@ ORDER BY created_at DESC
 LIMIT $3
 """
 
-
 class MemoryRepository:
     def __init__(self, embedding_service=None):
         self.embedding_service = embedding_service
@@ -256,7 +255,7 @@ class MemoryRepository:
         content_hash: str,
         metadata: dict,
         importance: float,
-        embedding,
+        embedding
     ):
         """
         Insert a memory using database-level deduplication.
@@ -275,7 +274,7 @@ class MemoryRepository:
             content_hash,
             metadata,
             importance,
-            embedding_vector,
+            embedding_vector
         )
 
         if memory_id is not None:
@@ -284,15 +283,16 @@ class MemoryRepository:
         return await connection.fetchval(
             SELECT_BY_HASH_SQL,
             company_id,
-            content_hash,
+            content_hash
         )
+
 
     async def _find_semantic_duplicate(
         self,
         connection: asyncpg.Connection,
         *,
         company_id,
-        embedding,
+        embedding
     ):
         """
         Find a semantically similar existing memory.
@@ -303,8 +303,9 @@ class MemoryRepository:
         return await connection.fetchrow(
             FIND_SIMILAR_MEMORY_SQL,
             company_id,
-            embedding_vector,
+            embedding_vector
         )
+
 
     async def _merge_memory(
         self,
@@ -313,7 +314,7 @@ class MemoryRepository:
         company_id,
         memory_id,
         metadata,
-        importance,
+        importance
     ):
         """
         Update an existing memory with new information.
@@ -324,8 +325,9 @@ class MemoryRepository:
             company_id,
             memory_id,
             metadata,
-            importance,
+            importance
         )
+
 
     async def _save_or_merge_memory(
         self,
@@ -340,17 +342,19 @@ class MemoryRepository:
         existing_id = await connection.fetchval(
             SELECT_BY_HASH_SQL,
             memory["company_id"],
-            memory["content_hash"],
+            memory["content_hash"]
         )
 
         if existing_id:
             return existing_id
 
+
         similar = await self._find_semantic_duplicate(
             connection,
-            company_id=memory["company_id"],
-            embedding=memory["embedding"],
+            company_id = memory["company_id"],
+            embedding = memory["embedding"]
         )
+
 
         if (
             similar
@@ -359,22 +363,24 @@ class MemoryRepository:
         ):
             return await self._merge_memory(
                 connection,
-                company_id=memory["company_id"],
-                memory_id=similar["id"],
-                metadata=memory["metadata"],
-                importance=memory["importance"],
+                company_id = memory["company_id"],
+                memory_id = similar["id"],
+                metadata = memory["metadata"],
+                importance = memory["importance"]
             )
+
 
         return await self._insert_memory(
             connection,
-            company_id=memory["company_id"],
-            memory_type=memory["memory_type"],
-            content=memory["content"],
-            content_hash=memory["content_hash"],
-            metadata=memory["metadata"],
-            importance=memory["importance"],
-            embedding=memory["embedding"],
+            company_id = memory["company_id"],
+            memory_type = memory["memory_type"],
+            content = memory["content"],
+            content_hash = memory["content_hash"],
+            metadata = memory["metadata"],
+            importance = memory["importance"],
+            embedding = memory["embedding"],
         )
+
 
     @staticmethod
     def _to_memory_hit(row) -> MemoryHit:
@@ -385,14 +391,14 @@ class MemoryRepository:
         data = dict(row)
 
         return MemoryHit(
-            id=data["id"],
-            company_id=data["company_id"],
-            content=data["content"],
-            memory_type=data["memory_type"],
-            metadata=data.get("metadata") or {},
-            importance=data["importance"],
-            similarity=data.get("similarity"),
-            created_at=data["created_at"],
+            id = data["id"],
+            company_id = data["company_id"],
+            content = data["content"],
+            memory_type = data["memory_type"],
+            metadata = data.get("metadata") or {},
+            importance = data["importance"],
+            similarity = data.get("similarity"),
+            created_at = data["created_at"],
         )
 
     async def write(
@@ -415,20 +421,22 @@ class MemoryRepository:
         """
 
         if self.embedding_service is None:
-            raise RuntimeError(
-                "An embedding service is required to write memories"
-            )
+            raise RuntimeError("An embedding service is required to write memories")
+
 
         if not content.strip():
             raise ValueError("Memory content cannot be empty")
 
+
         content_hash = create_content_hash(content)
+
 
         # Important:
         # Do not generate embeddings inside run_in_txn().
         # CockroachDB retries transactions on 40001.
         # Retrying Bedrock calls wastes cost and latency.
         embedding = await self.embedding_service.generate_embedding(content)
+
 
         if len(embedding) != EMBEDDING_DIMENSION:
             raise ValueError(
@@ -448,6 +456,7 @@ class MemoryRepository:
         }
 
         return await self._save_memory_input(memory)
+
 
     async def save_memory(
         self,
@@ -490,6 +499,7 @@ class MemoryRepository:
 
         return await run_in_txn(transaction)
 
+
     async def save_memories_batch(self, memories: list[MemoryInput]):
         """
         Insert multiple memories in one transaction.
@@ -504,18 +514,17 @@ class MemoryRepository:
         if not memories:
             return []
 
+
         async def transaction(connection: asyncpg.Connection):
             ids = []
 
             for memory in memories:
-                memory_id = await self._save_or_merge_memory(
-                    connection,
-                    memory,
-                )
+                memory_id = await self._save_or_merge_memory(connection, memory)
 
                 ids.append(memory_id)
 
             return ids
+
 
         return await run_in_txn(
             transaction
@@ -539,12 +548,10 @@ class MemoryRepository:
         WHERE company_id = $1 AND id = $2;
         """
 
+
         async with database.pool.acquire() as connection:
-            return await connection.fetchrow(
-                query,
-                company_id,
-                memory_id,
-            )
+            return await connection.fetchrow(query, company_id, memory_id)
+
 
     async def get_by_content_hash(self, company_id, content_hash):
         """
@@ -555,14 +562,15 @@ class MemoryRepository:
             return await connection.fetchval(
                 SELECT_BY_HASH_SQL,
                 company_id,
-                content_hash,
+                content_hash
             )
+
 
     async def find_similar_memory(
         self,
         company_id,
         embedding,
-        threshold: float = SEMANTIC_SIMILARITY_THRESHOLD,
+        threshold: float = SEMANTIC_SIMILARITY_THRESHOLD
     ):
         """
         Find a memory with semantic similarity above threshold.
@@ -574,24 +582,22 @@ class MemoryRepository:
             row = await connection.fetchrow(
                 FIND_SIMILAR_MEMORY_SQL,
                 company_id,
-                embedding_vector,
+                embedding_vector
             )
+
 
         if row is None:
             return None
 
+
         if row["similarity"] < threshold:
             return None
 
+
         return row
 
-    async def merge_memory(
-        self,
-        company_id,
-        memory_id,
-        metadata,
-        importance,
-    ):
+
+    async def merge_memory(self, company_id, memory_id, metadata, importance):
         """
         Merge new information into an existing memory.
         """
@@ -602,8 +608,9 @@ class MemoryRepository:
                 company_id,
                 memory_id,
                 metadata,
-                importance,
+                importance
             )
+
 
     async def search(
         self,
@@ -612,7 +619,7 @@ class MemoryRepository:
         query: str,
         k: int = 8,
         types: Sequence[MemoryType] | None = None,
-        since: datetime | None = None,
+        since: datetime | None = None
     ) -> list[MemoryHit]:
         """
         Two-stage memory retrieval.
@@ -632,15 +639,17 @@ class MemoryRepository:
                 "An embedding service is required for memory search"
             )
 
+
         if not query.strip():
             raise ValueError("Search query must not be empty")
+
 
         if k <= 0:
             raise ValueError("Search result count must be positive")
 
-        query_embedding = await self.embedding_service.generate_embedding(
-            query
-        )
+
+        query_embedding = await self.embedding_service.generate_embedding(query)
+
 
         if len(query_embedding) != EMBEDDING_DIMENSION:
             raise ValueError(
@@ -649,15 +658,19 @@ class MemoryRepository:
                 f"received {len(query_embedding)}"
             )
 
+
         query_vector = to_vector_literal(query_embedding)
 
+
         candidate_limit = max(50, k * 10)
+
 
         normalized_types = (
             list(types)
             if types
             else None
         )
+
 
         async with database.pool.acquire() as connection:
             rows = await connection.fetch(
@@ -667,8 +680,9 @@ class MemoryRepository:
                 candidate_limit,
                 normalized_types,
                 since,
-                k,
+                k
             )
+
 
         return [
             self._to_memory_hit(row)
@@ -684,13 +698,7 @@ class MemoryRepository:
         types: Sequence[MemoryType] | None = None,
         since: datetime | None = None,
     ) -> list[MemoryHit]:
-        """
-        Search memories across an explicitly selected set of companies.
-
-        This is intentionally separate from search() so normal
-        single-company memory retrieval keeps its existing tenant boundary.
-        The company restriction is enforced inside CockroachDB.
-        """
+        """Search only the explicitly supplied company allowlist."""
 
         if self.embedding_service is None:
             raise RuntimeError(
@@ -718,14 +726,8 @@ class MemoryRepository:
             )
 
         query_vector = to_vector_literal(query_embedding)
-
         candidate_limit = max(50, k * 10)
-
-        normalized_types = (
-            list(types)
-            if types
-            else None
-        )
+        normalized_types = list(types) if types else None
 
         async with database.pool.acquire() as connection:
             rows = await connection.fetch(
@@ -748,7 +750,7 @@ class MemoryRepository:
         *,
         company_id,
         memory_type: MemoryType,
-        limit: int = 20,
+        limit: int = 20
     ) -> list[MemoryHit]:
         """
         Return recent memories for a company.
@@ -760,20 +762,24 @@ class MemoryRepository:
         if limit <= 0:
             raise ValueError("Result limit must be positive")
 
+
         async def query(connection: asyncpg.Connection):
             return await connection.fetch(
                 RECENT_SQL,
                 company_id,
                 memory_type,
-                limit,
+                limit
             )
 
+
         rows = await run_in_txn(query)
+
 
         return [
             self._to_memory_hit(row)
             for row in rows
         ]
+
 
     async def delete_memory(self, company_id, memory_id):
         """
@@ -788,12 +794,10 @@ class MemoryRepository:
         RETURNING id;
         """
 
+
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(
-                query,
-                company_id,
-                memory_id,
-            )
+            return await connection.fetchval(query, company_id, memory_id)
+
 
     async def count_memories(self, company_id):
         """
@@ -806,11 +810,10 @@ class MemoryRepository:
         WHERE company_id = $1;
         """
 
+
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(
-                query,
-                company_id,
-            )
+            return await connection.fetchval(query, company_id)
+
 
     async def touch_memory(self, company_id, memory_id):
         """
@@ -828,27 +831,18 @@ class MemoryRepository:
         RETURNING id;
         """
 
-        async with database.pool.acquire() as connection:
-            return await connection.fetchval(
-                query,
-                company_id,
-                memory_id,
-            )
 
-    async def update_importance(
-        self,
-        company_id,
-        memory_id,
-        importance: float,
-    ):
+        async with database.pool.acquire() as connection:
+            return await connection.fetchval(query, company_id, memory_id)
+
+    async def update_importance(self, company_id, memory_id, importance: float):
         """
         Update memory importance score.
         """
 
         if not 0.0 <= importance <= 1.0:
-            raise ValueError(
-                "Importance must be between 0 and 1"
-            )
+            raise ValueError("Importance must be between 0 and 1")
+
 
         query = """
         UPDATE memories
@@ -857,20 +851,17 @@ class MemoryRepository:
         RETURNING id;
         """
 
+
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(
-                query,
-                company_id,
-                memory_id,
-                importance,
-            )
+            return await connection.fetchval(query, company_id, memory_id, importance)
+
 
     async def list_by_type(
         self,
         *,
         company_id,
         memory_type: MemoryType,
-        limit: int = 50,
+        limit: int = 50
     ) -> list[MemoryHit]:
         """
         List memories filtered by type.
@@ -880,6 +871,7 @@ class MemoryRepository:
 
         if limit <= 0:
             raise ValueError("Limit must be positive")
+
 
         query = """
         SELECT
@@ -897,18 +889,21 @@ class MemoryRepository:
         LIMIT $3;
         """
 
+
         async with database.pool.acquire() as connection:
             rows = await connection.fetch(
                 query,
                 company_id,
                 memory_type,
-                limit,
+                limit
             )
+
 
         return [
             self._to_memory_hit(row)
             for row in rows
         ]
+
 
     async def health_check(self) -> bool:
         """
@@ -921,5 +916,6 @@ class MemoryRepository:
 
         async with database.pool.acquire() as connection:
             result = await connection.fetchval(query)
+
 
         return result == 1

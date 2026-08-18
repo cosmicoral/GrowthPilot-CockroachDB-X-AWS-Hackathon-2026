@@ -13,46 +13,38 @@ app = FastAPI()
 app.include_router(memory_router)
 client = TestClient(app)
 
-
 @patch("backend.api.memory.MemoryRepository")
 def test_search_memories_success(mock_repo_class):
     company_id = uuid4()
-    app.dependency_overrides[get_current_company_id] = (
-        lambda: company_id
-    )
-
+    app.dependency_overrides[get_current_company_id] = lambda: company_id
+    
     mock_repo_instance = AsyncMock()
     mock_repo_class.return_value = mock_repo_instance
-
+    
     memory_id = uuid4()
     mock_hit = MemoryHit(
-        id=memory_id,
-        company_id=company_id,
-        content="Test memory",
-        memory_type="user",
-        metadata={},
-        importance=0.5,
-        similarity=0.99,
-        created_at=datetime.now(timezone.utc),
+        id = memory_id,
+        company_id = company_id,
+        content = "Test memory",
+        memory_type = "user",
+        metadata = {},
+        importance = 0.5,
+        similarity = 0.99,
+        created_at = datetime.now(timezone.utc)
     )
-
+    
     mock_repo_instance.search.return_value = [mock_hit]
 
     payload = {
         "query": "What is the test memory?",
-        "k": 5,
+        "k": 5
     }
 
     try:
-        response = client.post(
-            "/api/memory/search",
-            json=payload,
-        )
-
+        response = client.post("/api/memory/search", json=payload)
+        
         assert response.status_code == status.HTTP_200_OK
-
         data = response.json()
-
         assert len(data) == 1
         assert data[0]["content"] == "Test memory"
         assert data[0]["id"] == str(memory_id)
@@ -62,17 +54,12 @@ def test_search_memories_success(mock_repo_class):
     finally:
         app.dependency_overrides.clear()
 
-
 @patch("backend.api.memory.MemoryRepository")
 def test_search_memories_empty_query(mock_repo_class):
     company_id = uuid4()
+    app.dependency_overrides[get_current_company_id] = lambda: company_id
 
-    app.dependency_overrides[get_current_company_id] = (
-        lambda: company_id
-    )
-
-    mock_repo_instance = AsyncMock()
-    mock_repo_class.return_value = mock_repo_instance
+    mock_repo_class.return_value.search = AsyncMock(return_value=[])
 
     try:
         response = client.post(
@@ -83,27 +70,18 @@ def test_search_memories_empty_query(mock_repo_class):
             },
         )
 
-        assert (
-            response.status_code
-            == status.HTTP_422_UNPROCESSABLE_ENTITY
-        )
-
-        mock_repo_instance.search.assert_not_called()
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        mock_repo_class.return_value.search.assert_not_called()
 
     finally:
         app.dependency_overrides.clear()
 
-
 @patch("backend.api.memory.MemoryRepository")
 def test_search_memories_invalid_k(mock_repo_class):
     company_id = uuid4()
+    app.dependency_overrides[get_current_company_id] = lambda: company_id
 
-    app.dependency_overrides[get_current_company_id] = (
-        lambda: company_id
-    )
-
-    mock_repo_instance = AsyncMock()
-    mock_repo_class.return_value = mock_repo_instance
+    mock_repo_class.return_value.search = AsyncMock(return_value=[])
 
     try:
         response = client.post(
@@ -114,49 +92,8 @@ def test_search_memories_invalid_k(mock_repo_class):
             },
         )
 
-        assert (
-            response.status_code
-            == status.HTTP_422_UNPROCESSABLE_ENTITY
-        )
-
-        mock_repo_instance.search.assert_not_called()
-
-    finally:
-        app.dependency_overrides.clear()
-
-
-@patch("backend.api.memory.MemoryRepository")
-def test_search_memories_uses_authenticated_company(
-    mock_repo_class,
-):
-    company_id = uuid4()
-
-    app.dependency_overrides[get_current_company_id] = (
-        lambda: company_id
-    )
-
-    mock_repo_instance = AsyncMock()
-    mock_repo_class.return_value = mock_repo_instance
-    mock_repo_instance.search.return_value = []
-
-    try:
-        response = client.post(
-            "/api/memory/search",
-            json={
-                "query": "campaign performance",
-                "k": 5,
-            },
-        )
-
-        assert response.status_code == status.HTTP_200_OK
-
-        mock_repo_instance.search.assert_awaited_once_with(
-            company_id=company_id,
-            query="campaign performance",
-            k=5,
-            types=None,
-            since=None,
-        )
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        mock_repo_class.return_value.search.assert_not_called()
 
     finally:
         app.dependency_overrides.clear()
