@@ -11,6 +11,10 @@ class ContentAgent(Agent):
     It grounds the content in the founder's existing memory context.
     """
 
+    def __init__(self, context):
+        super().__init__(context)
+        self.retrieved_memories: list[MemoryHit] = []
+
     @property
     def name(self) -> str:
         return "content"
@@ -30,10 +34,12 @@ class ContentAgent(Agent):
                 k=5,
                 types=["episodic", "semantic", "user", "task", "reflection"]
             )
+            self.retrieved_memories = memories
             return memories
         except Exception as e:
             logger.error(f"Error retrieving memories: {e}")
             # Handle gracefully by returning empty context rather than crashing
+            self.retrieved_memories = []
             return []
 
     async def process(self, retrieved_memories: list[MemoryHit], prompt: str, **kwargs) -> str:
