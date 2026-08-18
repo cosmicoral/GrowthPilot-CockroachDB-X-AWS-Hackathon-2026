@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { useNavigate } from "react-router-dom"
 import Logo from "@/components/Logo"
 
@@ -11,43 +10,22 @@ const HERO_IMAGES = [
   { url: "https://images.unsplash.com/photo-1717565813196-8944b57877f8?w=400&h=300&fit=crop&auto=format&q=50", fallback: "#162d47" },
 ]
 
-const PRICING_PLANS = [
+const DEMO_CAPABILITIES = [
   {
-    name: "Starter",
-    description: "Perfect for founders just getting started",
-    monthly: 29,
-    annual: 19,
-    features: ["Market snapshot reports", "5 content pieces/mo", "Basic GTM framework", "Email support"],
-    highlight: false,
-    cta: "Get Started",
+    name: "Persistent memory",
+    description: "Company context and agent reflections are embedded, retrieved, and shown with provenance.",
   },
   {
-    name: "Growth",
-    star: true,
-    description: "For teams ready to accelerate",
-    monthly: 79,
-    annual: 59,
-    features: ["Full market research suite", "Unlimited content", "GTM playbooks", "AI Partner access"],
-    highlight: true,
-    cta: "Most Popular",
+    name: "Multi-agent workflow",
+    description: "Research, planning, content, analytics, and reflection agents share the same founder context.",
   },
   {
-    name: "Scale",
-    description: "For growing businesses with real traction",
-    monthly: 149,
-    annual: 109,
-    features: ["Multi-brand workspace", "Custom personas", "Priority AI insights", "Slack integration"],
-    highlight: false,
-    cta: "Get Started",
+    name: "Visible learning loop",
+    description: "Simulated campaign performance becomes a reflection memory that informs the next content run.",
   },
   {
-    name: "Enterprise",
-    description: "For orgs that need full control",
-    monthly: 349,
-    annual: 279,
-    features: ["Dedicated success manager", "Custom AI training", "SSO + SCIM", "SLA guarantee"],
-    highlight: false,
-    cta: "Get Started",
+    name: "Privacy-safe GrowthGraph",
+    description: "A synthetic 75-founder cohort demonstrates cross-tenant aggregate insights without exposing raw data.",
   },
 ]
 
@@ -55,12 +33,12 @@ const FEATURES = [
   {
     icon: "🧭",
     heading: "Strategic Clarity",
-    description: "Get a crystal-clear positioning statement and ICP profile grounded in real market data — not guesswork.",
+    description: "Develop positioning and ICP guidance grounded in your company context and retrieved memories.",
   },
   {
     icon: "📡",
     heading: "Market Intelligence",
-    description: "Monitor competitors, Reddit signals, and customer pain points in one live dashboard updated weekly.",
+    description: "Generate structured market research from your company context or source material you provide.",
   },
   {
     icon: "✍️",
@@ -76,7 +54,6 @@ const FEATURES = [
 
 export default function LandingPage() {
   const navigate = useNavigate()
-  const [billing, setBilling] = useState<"monthly" | "annual">("monthly")
 
   return (
     <div style={{ fontFamily: "'Oranienbaum', serif", backgroundColor: "#b8d4f0", minHeight: "100vh" }}>
@@ -217,7 +194,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ───── SEGMENT 2: PRICING ───── */}
+      {/* ───── SEGMENT 2: HACKATHON DEMO SCOPE ───── */}
       <section style={{
         padding: "0 40px 80px",
         overflow: "hidden",
@@ -272,49 +249,18 @@ export default function LandingPage() {
             textTransform: "uppercase",
             color: "rgb(233, 241, 249)",
             margin: "0 0 8px",
-          }}>Pricing</p>
+          }}>Live demo scope</p>
           <p style={{
             fontFamily: "'Lobster Two', cursive",
             color: "rgb(13, 18, 24)",
             margin: "0 0 28px",
             fontSize: 30,
           }}>
-            No surprise fees. No lock-in. Cancel any time.
+            Built for the CockroachDB × AWS hackathon
           </p>
-
-          {/* Toggle */}
-          <div style={{
-            display: "inline-flex",
-            background: "rgba(255,255,255,0.5)",
-            borderRadius: 8,
-            padding: 4,
-            gap: 4,
-          }}>
-            {(["monthly", "annual"] as const).map(b => (
-              <button
-                key={b}
-                onClick={() => setBilling(b)}
-                style={{
-                  background: billing === b ? "#0d2137" : "transparent",
-                  color: billing === b ? "#fff" : "#2d5a8e",
-                  border: "none",
-                  borderRadius: 6,
-                  padding: "8px 20px",
-                  fontFamily: "'Playfair Display SC', serif",
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  textTransform: "capitalize",
-                }}
-              >
-                {b === "annual" ? "Annual (save 25%)" : "Monthly"}
-              </button>
-            ))}
-          </div>
         </div>
 
-        {/* 4 plan cards */}
+        {/* Implemented demo capabilities */}
         <div className="pricing-grid" style={{
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
@@ -322,109 +268,50 @@ export default function LandingPage() {
           maxWidth: 1100,
           margin: "0 auto",
         }}>
-          {PRICING_PLANS.map((plan) => (
+          {DEMO_CAPABILITIES.map((capability) => (
             <div
-              key={plan.name}
+              key={capability.name}
               style={{
-                background: plan.highlight ? "#0d2137" : "rgba(255,255,255,0.45)",
-                border: plan.highlight ? "2px solid #4a7ab5" : "1.5px solid rgba(255,255,255,0.6)",
+                background: "rgba(255,255,255,0.52)",
+                border: "1.5px solid rgba(255,255,255,0.68)",
                 borderRadius: 16,
                 padding: "28px 22px",
                 display: "flex",
                 flexDirection: "column",
-                gap: 0,
+                gap: 12,
                 backdropFilter: "blur(8px)",
-                boxShadow: plan.highlight ? "0 8px 32px rgba(13,33,55,0.25)" : "0 2px 12px rgba(13,33,55,0.08)",
+                boxShadow: "0 2px 12px rgba(13,33,55,0.08)",
                 transition: "transform 0.2s",
               }}
               onMouseEnter={e => (e.currentTarget.style.transform = "translateY(-4px)")}
               onMouseLeave={e => (e.currentTarget.style.transform = "translateY(0)")}
             >
-              <div style={{ marginBottom: 6, fontFamily: "'Playfair Display SC', serif" }}>
-                <span style={{
-                  fontFamily: "'Playfair Display SC', serif",
-                  fontWeight: 700,
-                  fontSize: 16,
-                  color: plan.highlight ? "#8ab4d8" : "#0d2137",
-                }}>
-                  {plan.name} {plan.star ? "★" : ""}
-                </span>
-              </div>
-              <p style={{
-                fontFamily: "'Playfair Display', serif",
-                fontSize: 13,
-                color: plan.highlight ? "#8ab4d8" : "#2d5a8e",
-                margin: "0 0 14px",
-                lineHeight: "25px",
-              }}>
-                {plan.description}
-              </p>
               <div style={{
-                background: plan.highlight ? "#4a7ab5" : "rgba(74,122,181,0.15)",
-                borderRadius: 8,
-                padding: "12px 16px",
-                marginBottom: 18,
-                textAlign: "center",
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: "rgba(74,122,181,0.2)",
+                color: "#0d2137",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 700,
               }}>
-                <span style={{
-                  fontFamily: "'Playfair Display', serif",
-                  fontSize: 32,
-                  fontWeight: 700,
-                  color: plan.highlight ? "#fff" : "#0d2137",
-                }}>
-                  ${billing === "monthly" ? plan.monthly : plan.annual}
-                </span>
-                <span style={{ fontSize: 13, color: plan.highlight ? "#c4daef" : "#4a7ab5", marginLeft: 4 }}>/ mo</span>
+                ✓
               </div>
-
-              <div style={{ borderTop: `1px solid ${plan.highlight ? "rgba(255,255,255,0.12)" : "rgba(74,122,181,0.2)"}`, paddingTop: 14, marginBottom: 14 }}>
-                <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: plan.highlight ? "#5b9bd5" : "#4a7ab5", marginBottom: 10 }}>features</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {plan.features.map((f, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{
-                        width: 16,
-                        height: 16,
-                        borderRadius: 4,
-                        background: plan.highlight ? "#4a7ab5" : "rgba(74,122,181,0.2)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 10,
-                        color: plan.highlight ? "#fff" : "#4a7ab5",
-                        flexShrink: 0,
-                      }}>✓</span>
-                      <span style={{ fontFamily: "'Oranienbaum', serif", fontSize: 15, color: plan.highlight ? "#d4e8f8" : "#1a3a5c" }}>{f}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <button
-                onClick={() => navigate("/signup")}
-                style={{
-                  marginTop: "auto",
-                  background: plan.highlight ? "#4a7ab5" : "transparent",
-                  border: plan.highlight ? "none" : "1.5px solid #2d5a8e",
-                  color: plan.highlight ? "#fff" : "#0d2137",
-                  borderRadius: 8,
-                  padding: "11px",
-                  fontFamily: "'Oranienbaum', serif",
-                  fontWeight: 600,
-                  fontSize: 16,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  width: "100%",
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = plan.highlight ? "#2d5a8e" : "rgba(13,33,55,0.08)"
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = plan.highlight ? "#4a7ab5" : "transparent"
-                }}
-              >
-                {plan.cta}
-              </button>
+              <h3 style={{
+                fontFamily: "'Playfair Display', serif",
+                fontSize: 19,
+                color: "#0d2137",
+                margin: 0,
+              }}>{capability.name}</h3>
+              <p style={{
+                fontFamily: "'Oranienbaum', serif",
+                fontSize: 16,
+                color: "#1a3a5c",
+                margin: 0,
+                lineHeight: 1.5,
+              }}>{capability.description}</p>
             </div>
           ))}
         </div>

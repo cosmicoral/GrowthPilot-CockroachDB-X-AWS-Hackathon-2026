@@ -156,7 +156,7 @@ flowchart LR
 | Market Research | Bedrock- or user-source findings, structured and deduplicated |
 | Content Generation | Memory-grounded marketing content persisted as task memory |
 | Analytics & Reflection | Deterministic comparison plus Bedrock narrative and saved reflection |
-| GrowthGraph | Synthetic 50-founder cohort plus a privacy-safe cross-tenant aggregate |
+| GrowthGraph | Synthetic 75-founder cohort plus a privacy-safe cross-tenant aggregate |
 | Memory Inspector | Retrieved content, type, similarity, recency, and importance |
 | Observability | Per-agent duration, success/error, output, and retrieved-memory traces |
 | Authentication | Hashed credentials and secure company-scoped session cookies |

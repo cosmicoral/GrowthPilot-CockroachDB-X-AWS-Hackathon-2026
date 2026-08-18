@@ -8,6 +8,7 @@ operations require custom SQL.
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Sequence, TypedDict
 from uuid import UUID
@@ -438,13 +439,30 @@ class MemoryRepository:
         """
 
         data = dict(row)
+        metadata = data.get("metadata") or {}
+
+        # Older GrowthGraph seed runs wrote JSONB metadata as a JSON string
+        # before the asyncpg JSON codec was standardised.  Accept those rows
+        # during the demo migration window instead of failing the entire
+        # retrieval response with a Pydantic validation error.
+        if isinstance(metadata, str):
+            try:
+                decoded_metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                decoded_metadata = {}
+
+            metadata = (
+                decoded_metadata
+                if isinstance(decoded_metadata, dict)
+                else {}
+            )
 
         return MemoryHit(
             id = data["id"],
             company_id = data["company_id"],
             content = data["content"],
             memory_type = data["memory_type"],
-            metadata = data.get("metadata") or {},
+            metadata = metadata,
             importance = data["importance"],
             similarity = data.get("similarity"),
             created_at = data["created_at"],
