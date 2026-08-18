@@ -220,9 +220,9 @@ async def test_trace_repository_redacts_and_bounds_payloads(monkeypatch):
 
     async def run_transaction(operation):
         connection = AsyncMock()
-        connection.fetchval.return_value = trace_id
+        connection.fetch.return_value = [[trace_id]]
         result = await operation(connection)
-        captured["args"] = connection.fetchval.await_args.args
+        captured["args"] = connection.fetch.await_args.args
         return result
 
     with patch(
@@ -280,9 +280,9 @@ async def test_trace_repository_caps_total_payload_size(monkeypatch):
 
     async def run_transaction(operation):
         connection = AsyncMock()
-        connection.fetchval.return_value = uuid4()
+        connection.fetch.return_value = [[uuid4()]]
         result = await operation(connection)
-        captured["args"] = connection.fetchval.await_args.args
+        captured["args"] = connection.fetch.await_args.args
         return result
 
     with patch(

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from backend.api.deps import get_current_company_id
-from backend.database.database import database
+from backend.database.database import database, fetch_one
 from backend.llm.client import BedrockClient
 from backend.memory.embedding import BedrockEmbeddingService
 from backend.memory.repository import MemoryRepository
@@ -51,7 +51,7 @@ async def get_my_company(
     WHERE id = $1;
     """
     async with database.acquire() as conn:
-        row = await conn.fetchrow(query, company_id)
+        row = await fetch_one(conn, query, company_id)
 
     if not row:
         raise HTTPException(
@@ -75,7 +75,8 @@ async def complete_onboarding(
     RETURNING id, name, email, website, industry, description;
     """
     async with database.acquire() as conn:
-        row = await conn.fetchrow(
+        row = await fetch_one(
+            conn,
             query,
             company_id,
             _optional_text(request.website),

@@ -87,6 +87,47 @@ def create_test_embedding():
     return embedding
 
 
+def test_to_memory_hit_decodes_legacy_json_string_metadata():
+    """Legacy JSON-string rows remain readable during data repair."""
+
+    memory_id = uuid4()
+    company_id = uuid4()
+    created_at = datetime.now(timezone.utc)
+
+    hit = MemoryRepository._to_memory_hit({
+        "id": memory_id,
+        "company_id": company_id,
+        "content": "Synthetic founder insight",
+        "memory_type": "semantic",
+        "metadata": '{"theme":"industry_trend","synthetic":true}',
+        "importance": 0.8,
+        "similarity": 0.9,
+        "created_at": created_at,
+    })
+
+    assert hit.metadata == {
+        "theme": "industry_trend",
+        "synthetic": True,
+    }
+
+
+def test_to_memory_hit_ignores_invalid_legacy_metadata():
+    """A malformed legacy value must not take down memory retrieval."""
+
+    hit = MemoryRepository._to_memory_hit({
+        "id": uuid4(),
+        "company_id": uuid4(),
+        "content": "Synthetic founder insight",
+        "memory_type": "semantic",
+        "metadata": "not-json",
+        "importance": 0.8,
+        "similarity": 0.9,
+        "created_at": datetime.now(timezone.utc),
+    })
+
+    assert hit.metadata == {}
+
+
 @pytest.mark.asyncio
 async def test_save_memory(monkeypatch):
     """

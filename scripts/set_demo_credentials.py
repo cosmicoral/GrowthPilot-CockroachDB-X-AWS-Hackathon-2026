@@ -22,7 +22,7 @@ authenticate.
 Usage (password is prompted, never passed on the command line, so it stays
 out of shell history):
 
-    python scripts/set_demo_credentials.py demo@growthpilot.local
+    python scripts/set_demo_credentials.py demo@growthpilot.dev
 """
 
 from __future__ import annotations
@@ -37,9 +37,12 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from backend.api.auth import hash_password  # noqa: E402
-from backend.database.database import database  # noqa: E402
+from backend.database.database import (  # noqa: E402
+    database,
+    fetch_one,
+    fetch_value,
+)
 from scripts.seed_demo_founder import COMPANY_ID  # noqa: E402
-
 
 UPDATE_SQL = """
 UPDATE companies
@@ -78,7 +81,8 @@ async def main() -> None:
 
     try:
         async with database.pool.acquire() as connection:
-            row = await connection.fetchrow(
+            row = await fetch_one(
+                connection,
                 UPDATE_SQL,
                 COMPANY_ID,
                 args.email,
@@ -94,7 +98,8 @@ async def main() -> None:
 
         memory_count = None
         async with database.pool.acquire() as connection:
-            memory_count = await connection.fetchval(
+            memory_count = await fetch_value(
+                connection,
                 "SELECT count(*) FROM memories WHERE company_id = $1",
                 COMPANY_ID,
             )

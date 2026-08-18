@@ -98,4 +98,6 @@ async def test_seed_founder_groups_all_database_writes_in_one_transaction(monkey
     assert transaction_connection.execute.await_count == memory_count + 1
     for call in transaction_connection.execute.await_args_list[1:]:
         assert "WHERE company_id = $1 AND id = $2" in call.args[0]
+        assert "SET metadata = $3" in call.args[0]
         assert call.args[1] == founder["company_id"]
+        assert isinstance(call.args[3], dict)

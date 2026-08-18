@@ -398,11 +398,12 @@ async def seed_founder(
             await connection.execute(
                 """
                 UPDATE memories
-                SET importance = $3, created_at = $4
+                SET metadata = $3, importance = $4, created_at = $5
                 WHERE company_id = $1 AND id = $2
                 """,
                 company_id,
                 memory_id,
+                memory["metadata"],
                 memory["importance"],
                 created_at,
             )

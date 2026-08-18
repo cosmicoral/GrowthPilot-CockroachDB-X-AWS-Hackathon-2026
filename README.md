@@ -156,7 +156,7 @@ flowchart LR
 | Market Research | Bedrock- or user-source findings, structured and deduplicated |
 | Content Generation | Memory-grounded marketing content persisted as task memory |
 | Analytics & Reflection | Deterministic comparison plus Bedrock narrative and saved reflection |
-| GrowthGraph | Synthetic 50-founder cohort plus a privacy-safe cross-tenant aggregate |
+| GrowthGraph | Synthetic 75-founder cohort plus a privacy-safe cross-tenant aggregate |
 | Memory Inspector | Retrieved content, type, similarity, recency, and importance |
 | Observability | Per-agent duration, success/error, output, and retrieved-memory traces |
 | Authentication | Hashed credentials and secure company-scoped session cookies |
@@ -451,6 +451,13 @@ Chrome blocks in private windows — login appears to succeed and then every
 subsequent request is a `401`. Proxying `/api/*` through the frontend origin
 makes the cookie first-party and removes the CORS surface entirely. Leave
 `VITE_API_BASE_URL` unset so the client issues same-origin relative requests.
+
+During a proxy rollout, an explicitly cross-origin frontend build has a
+compatibility path: login/signup request a bearer session and keep it in
+per-tab `sessionStorage`, then send it through the API's existing
+`Authorization: Bearer` support. The token is never persisted to localStorage.
+The same-origin proxy plus HTTP-only cookie remains the preferred production
+configuration.
 
 The second rule is SPA deep-link handling: `404-200` serves `index.html` with a
 `200` when a path does not match a build artifact. A plain `200` rewrite would

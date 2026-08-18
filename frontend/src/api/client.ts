@@ -4,6 +4,41 @@ export const API_BASE_URL = configuredApiBaseUrl
   ? configuredApiBaseUrl.replace(/\/$/, "")
   : ""
 
+export const USES_CROSS_ORIGIN_API = (() => {
+  if (!API_BASE_URL || typeof window === "undefined") return false
+  return new URL(API_BASE_URL, window.location.origin).origin !== window.location.origin
+})()
+
+const SESSION_TOKEN_KEY = "growthpilot_session_token"
+let inMemorySessionToken: string | null = null
+
+export function getSessionToken() {
+  if (inMemorySessionToken) return inMemorySessionToken
+  try {
+    return window.sessionStorage.getItem(SESSION_TOKEN_KEY)
+  } catch {
+    return null
+  }
+}
+
+export function setSessionToken(token: string) {
+  inMemorySessionToken = token
+  try {
+    window.sessionStorage.setItem(SESSION_TOKEN_KEY, token)
+  } catch {
+    // The in-memory fallback still supports browsers with disabled storage.
+  }
+}
+
+export function clearSessionToken() {
+  inMemorySessionToken = null
+  try {
+    window.sessionStorage.removeItem(SESSION_TOKEN_KEY)
+  } catch {
+    // Nothing else to clear when storage is unavailable.
+  }
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -32,6 +67,7 @@ function errorMessage(payload: unknown, fallback: string) {
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}) {
   let response: Response
+  const sessionToken = getSessionToken()
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
@@ -40,6 +76,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}) {
       cache: "no-store",
       headers: {
         ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
         ...init.headers,
       },
     })
@@ -78,12 +115,16 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}) {
 
 export async function apiStream(path: string, body: unknown) {
   let response: Response
+  const sessionToken = getSessionToken()
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method: "POST",
       credentials: "include",
       cache: "no-store",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+      },
       body: JSON.stringify(body),
     })
   } catch {

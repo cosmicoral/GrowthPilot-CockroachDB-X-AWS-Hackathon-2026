@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from backend.agents.context import AgentContext
 from backend.agents.market_research import MarketResearchAgent
 from backend.api.deps import get_current_company_id
-from backend.database.database import database
+from backend.database.database import database, fetch_one
 from backend.llm.client import BedrockClient
 from backend.memory.embedding import BedrockEmbeddingService
 from backend.memory.repository import MemoryRepository
@@ -51,7 +51,7 @@ async def run_market_research(
     WHERE id = $1;
     """
     async with database.acquire() as conn:
-        row = await conn.fetchrow(query, company_id)
+        row = await fetch_one(conn, query, company_id)
 
     if not row:
         raise HTTPException(

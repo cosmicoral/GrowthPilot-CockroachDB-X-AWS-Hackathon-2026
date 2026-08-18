@@ -20,7 +20,12 @@ import asyncpg
 from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, Field
 
-from backend.database.database import database, run_in_txn
+from backend.database.database import (
+    database,
+    fetch_one,
+    fetch_value,
+    run_in_txn,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -321,7 +326,8 @@ class TraceRepository:
             }
 
             async def transaction(connection: asyncpg.Connection):
-                return await connection.fetchval(
+                return await fetch_value(
+                    connection,
                     INSERT_TRACE_SQL,
                     company_id,
                     agent_name,
@@ -382,7 +388,8 @@ class TraceRepository:
         Fetch a single trace by ID.
         """
         async with database.acquire() as connection:
-            row = await connection.fetchrow(
+            row = await fetch_one(
+                connection,
                 SELECT_TRACE_BY_ID_SQL,
                 company_id,
                 trace_id,

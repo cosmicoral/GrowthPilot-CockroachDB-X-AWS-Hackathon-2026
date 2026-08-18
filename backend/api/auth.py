@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from backend.auth_config import get_auth_settings
-from backend.database.database import database
+from backend.database.database import database, fetch_one, fetch_value
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -30,6 +30,7 @@ class SignupRequest(BaseModel):
     website: str | None = None
     industry: str | None = None
     description: str | None = None
+    use_bearer_token: bool = False
 
     @field_validator("name")
     @classmethod
@@ -43,10 +44,12 @@ class SignupRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1, max_length=128)
+    use_bearer_token: bool = False
 
 
 class SessionResponse(BaseModel):
     company_id: UUID
+    session_token: str | None = None
 
 
 def _normalise_email(email: EmailStr | str) -> str:
@@ -184,6 +187,7 @@ async def create_session_token(
 @router.post(
     "/signup",
     response_model=SessionResponse,
+    response_model_exclude_none=True,
     status_code=status.HTTP_201_CREATED,
 )
 async def signup(request: SignupRequest, response: Response) -> SessionResponse:
@@ -199,7 +203,8 @@ async def signup(request: SignupRequest, response: Response) -> SessionResponse:
     try:
         async with database.acquire() as conn:
             async with conn.transaction():
-                company_id = await conn.fetchval(
+                company_id = await fetch_value(
+                    conn,
                     insert_query,
                     request.name,
                     email,
@@ -222,16 +227,23 @@ async def signup(request: SignupRequest, response: Response) -> SessionResponse:
     # committed. A rollback can therefore never leave a phantom cookie whose
     # hash does not exist in the database.
     _set_session_cookie(response, session_token, expires_at)
-    return SessionResponse(company_id=company_id)
+    return SessionResponse(
+        company_id=company_id,
+        session_token=(session_token if request.use_bearer_token else None),
+    )
 
 
-@router.post("/login", response_model=SessionResponse)
+@router.post(
+    "/login",
+    response_model=SessionResponse,
+    response_model_exclude_none=True,
+)
 async def login(request: LoginRequest, response: Response) -> SessionResponse:
     """Authenticate credentials, upgrade legacy hashes, and start a session."""
     email = _normalise_email(request.email)
     query = "SELECT id, password_hash FROM companies WHERE email = $1;"
     async with database.acquire() as conn:
-        row = await conn.fetchrow(query, email)
+        row = await fetch_one(conn, query, email)
 
     stored_hash = row["password_hash"] if row and row["password_hash"] else DUMMY_PASSWORD_HASH
     is_valid = await asyncio.to_thread(verify_password, request.password, stored_hash)
@@ -260,7 +272,10 @@ async def login(request: LoginRequest, response: Response) -> SessionResponse:
             )
 
     _set_session_cookie(response, session_token, expires_at)
-    return SessionResponse(company_id=company_id)
+    return SessionResponse(
+        company_id=company_id,
+        session_token=(session_token if request.use_bearer_token else None),
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

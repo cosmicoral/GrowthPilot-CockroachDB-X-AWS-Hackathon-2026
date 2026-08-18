@@ -25,6 +25,28 @@ T = TypeVar("T")
 
 SERIALIZATION_FAILURE = "40001"
 
+
+async def fetch_one(
+    connection: asyncpg.Connection,
+    query: str,
+    *args,
+):
+    """Return one fully drained row without leaving a portal suspended."""
+
+    rows = await connection.fetch(query, *args)
+    return rows[0] if rows else None
+
+
+async def fetch_value(
+    connection: asyncpg.Connection,
+    query: str,
+    *args,
+):
+    """Return one scalar while fully draining CockroachDB's result portal."""
+
+    row = await fetch_one(connection, query, *args)
+    return row[0] if row is not None else None
+
 async def _init_connection(conn: asyncpg.Connection) -> None:
     """Register type codecs and session settings asyncpg/CockroachDB need.
 
@@ -51,8 +73,8 @@ async def _init_connection(conn: asyncpg.Connection) -> None:
     # backend/memory/repository.py, so the memory write path still fails, just
     # with a less obvious error.
     #
-    # The actual fix is to never leave a portal suspended: see _drained_row /
-    # _drained_value in backend/memory/repository.py, which use fetch()
+    # The actual fix is to never leave a portal suspended: see fetch_one /
+    # fetch_value above, which use fetch()
     # (no row limit, result set drained, portal closed) instead of
     # fetchrow()/fetchval() (row limit 1, portal left open). With those in
     # place no session setting is needed and no preview feature is relied on.

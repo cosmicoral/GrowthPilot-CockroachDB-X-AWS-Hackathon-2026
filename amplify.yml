@@ -4,9 +4,11 @@
 # App settings -> Environment variables. Vite inlines it at build time, so
 # changing it requires a redeploy, not just a restart.
 #
-# React Router needs a rewrite rule so deep links do not 404. In the Amplify
-# console under Rewrites and redirects, add:
-#   Source: /<*>   Target: /index.html   Type: 200 (Rewrite)
+# Configure these rules in the Amplify console, in this order:
+#   /api/<*> -> https://<backend-domain>/api/<*>  200 (Rewrite)
+#   /<*>     -> /index.html                       404-200 (Rewrite)
+# The API rule makes the session cookie first-party in Safari. Keep
+# VITE_API_BASE_URL empty once that rule is active.
 version: 1
 applications:
   - appRoot: frontend
