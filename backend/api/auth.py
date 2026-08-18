@@ -13,7 +13,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from backend.auth_config import get_auth_settings
-from backend.database.database import database
+from backend.database.database import database, fetch_one, fetch_value
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -199,7 +199,8 @@ async def signup(request: SignupRequest, response: Response) -> SessionResponse:
     try:
         async with database.acquire() as conn:
             async with conn.transaction():
-                company_id = await conn.fetchval(
+                company_id = await fetch_value(
+                    conn,
                     insert_query,
                     request.name,
                     email,
@@ -231,7 +232,7 @@ async def login(request: LoginRequest, response: Response) -> SessionResponse:
     email = _normalise_email(request.email)
     query = "SELECT id, password_hash FROM companies WHERE email = $1;"
     async with database.acquire() as conn:
-        row = await conn.fetchrow(query, email)
+        row = await fetch_one(conn, query, email)
 
     stored_hash = row["password_hash"] if row and row["password_hash"] else DUMMY_PASSWORD_HASH
     is_valid = await asyncio.to_thread(verify_password, request.password, stored_hash)

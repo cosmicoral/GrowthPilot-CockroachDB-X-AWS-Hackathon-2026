@@ -17,6 +17,8 @@ import asyncpg
 
 from backend.database.database import (
     database,
+    fetch_one,
+    fetch_value,
     run_in_txn,
     to_vector_literal,
 )
@@ -617,7 +619,7 @@ class MemoryRepository:
 
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchrow(query, company_id, memory_id)
+            return await fetch_one(connection, query, company_id, memory_id)
 
 
     async def get_by_content_hash(self, company_id, content_hash):
@@ -626,7 +628,8 @@ class MemoryRepository:
         """
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(
+            return await fetch_value(
+                connection,
                 SELECT_BY_HASH_SQL,
                 company_id,
                 content_hash
@@ -646,7 +649,8 @@ class MemoryRepository:
         embedding_vector = to_vector_literal(embedding)
 
         async with database.pool.acquire() as connection:
-            row = await connection.fetchrow(
+            row = await fetch_one(
+                connection,
                 FIND_SIMILAR_MEMORY_SQL,
                 company_id,
                 embedding_vector
@@ -670,7 +674,8 @@ class MemoryRepository:
         """
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(
+            return await fetch_value(
+                connection,
                 MERGE_MEMORY_SQL,
                 company_id,
                 memory_id,
@@ -863,7 +868,7 @@ class MemoryRepository:
 
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(query, company_id, memory_id)
+            return await fetch_value(connection, query, company_id, memory_id)
 
 
     async def count_memories(self, company_id):
@@ -879,7 +884,7 @@ class MemoryRepository:
 
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(query, company_id)
+            return await fetch_value(connection, query, company_id)
 
 
     async def touch_memory(self, company_id, memory_id):
@@ -900,7 +905,7 @@ class MemoryRepository:
 
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(query, company_id, memory_id)
+            return await fetch_value(connection, query, company_id, memory_id)
 
     async def update_importance(self, company_id, memory_id, importance: float):
         """
@@ -920,7 +925,13 @@ class MemoryRepository:
 
 
         async with database.pool.acquire() as connection:
-            return await connection.fetchval(query, company_id, memory_id, importance)
+            return await fetch_value(
+                connection,
+                query,
+                company_id,
+                memory_id,
+                importance,
+            )
 
 
     async def list_by_type(
@@ -982,7 +993,7 @@ class MemoryRepository:
         """
 
         async with database.pool.acquire() as connection:
-            result = await connection.fetchval(query)
+            result = await fetch_value(connection, query)
 
 
         return result == 1

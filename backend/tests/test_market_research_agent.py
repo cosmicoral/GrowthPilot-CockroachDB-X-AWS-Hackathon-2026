@@ -297,14 +297,14 @@ def test_api_run_market_research_endpoint():
     ) as mock_agent_cls:
         mock_conn = AsyncMock()
         mock_db.acquire.return_value.__aenter__.return_value = mock_conn
-        mock_conn.fetchrow.return_value = {
+        mock_conn.fetch.return_value = [{
             "id": company_id,
             "name": "EcoCharge",
             "email": "contact@ecocharge.example.com",
             "website": "https://ecocharge.example.com",
             "industry": "CleanTech",
             "description": "EV charging startup",
-        }
+        }]
 
         mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value=mock_result)

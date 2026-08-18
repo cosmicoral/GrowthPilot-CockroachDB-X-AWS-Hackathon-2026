@@ -127,10 +127,10 @@ def test_dependency_token_valid(mock_db, client):
     company_uuid = uuid4()
     session_token = generate_session_token()
     conn = configure_mock_database(mock_db)
-    conn.fetchrow.return_value = {
+    conn.fetch.return_value = [{
         "company_id": company_uuid,
         "expires_at": datetime.now(timezone.utc) + timedelta(days=1),
-    }
+    }]
 
     response = client.get(
         "/test-protected",
@@ -139,7 +139,7 @@ def test_dependency_token_valid(mock_db, client):
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"company_id": str(company_uuid)}
-    query, token_hash = conn.fetchrow.await_args.args
+    query, token_hash = conn.fetch.await_args.args
     assert "WHERE token_hash = $1" in query
     assert token_hash == hash_session_token(session_token)
 
@@ -156,7 +156,7 @@ def test_dependency_token_expired_is_deleted(mock_db, client):
 
     async def fetch_expired_session(*args):
         events.append("fetch")
-        return expired_row
+        return [expired_row]
 
     async def delete_expired_session(*args):
         events.append("delete")
@@ -164,7 +164,7 @@ def test_dependency_token_expired_is_deleted(mock_db, client):
     async def release_connection(*args):
         events.append("release")
 
-    conn.fetchrow.side_effect = fetch_expired_session
+    conn.fetch.side_effect = fetch_expired_session
     conn.execute.side_effect = delete_expired_session
     mock_db.acquire.return_value.__aexit__.side_effect = release_connection
 
@@ -194,7 +194,7 @@ def test_signup_creates_hashed_session_cookie(mock_db, client, monkeypatch):
     monkeypatch.setenv("SESSION_COOKIE_SECURE", "false")
     company_uuid = uuid4()
     conn = configure_mock_database(mock_db)
-    conn.fetchval.return_value = company_uuid
+    conn.fetch.return_value = [[company_uuid]]
 
     response = client.post(
         "/api/auth/signup",
@@ -211,7 +211,7 @@ def test_signup_creates_hashed_session_cookie(mock_db, client, monkeypatch):
     assert response.cookies.get("session_token")
     assert response.headers["cache-control"] == "no-store"
 
-    company_insert = conn.fetchval.await_args
+    company_insert = conn.fetch.await_args
     assert company_insert.args[2] == "info@acme.com"
 
     session_insert = next(
@@ -237,7 +237,7 @@ def test_signup_does_not_set_cookie_when_transaction_rolls_back(
 ):
     company_uuid = uuid4()
     conn = configure_mock_database(mock_db)
-    conn.fetchval.return_value = company_uuid
+    conn.fetch.return_value = [[company_uuid]]
     transaction_context = conn.transaction.return_value
     transaction_context.__aexit__.side_effect = RuntimeError("commit failed")
 
@@ -260,10 +260,10 @@ def test_login_creates_session_without_returning_token(mock_db, client, monkeypa
     company_uuid = uuid4()
     password = "securepassword"
     conn = configure_mock_database(mock_db)
-    conn.fetchrow.return_value = {
+    conn.fetch.return_value = [{
         "id": company_uuid,
         "password_hash": hash_password(password),
-    }
+    }]
 
     response = client.post(
         "/api/auth/login",
@@ -273,7 +273,7 @@ def test_login_creates_session_without_returning_token(mock_db, client, monkeypa
     assert response.status_code == status.HTTP_200_OK
     assert response.json() == {"company_id": str(company_uuid)}
     assert response.cookies.get("session_token")
-    assert conn.fetchrow.await_args.args[1] == "user@acme.com"
+    assert conn.fetch.await_args.args[1] == "user@acme.com"
     assert any("INSERT INTO sessions" in call.args[0] for call in conn.execute.await_args_list)
 
 
@@ -283,10 +283,10 @@ def test_login_upgrades_legacy_password_hash(mock_db, client, monkeypatch):
     company_uuid = uuid4()
     password = "legacy-password"
     conn = configure_mock_database(mock_db)
-    conn.fetchrow.return_value = {
+    conn.fetch.return_value = [{
         "id": company_uuid,
         "password_hash": make_legacy_password_hash(password),
-    }
+    }]
 
     response = client.post(
         "/api/auth/login",

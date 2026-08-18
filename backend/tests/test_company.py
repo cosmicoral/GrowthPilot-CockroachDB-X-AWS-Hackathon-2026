@@ -20,14 +20,14 @@ def test_get_my_company_success():
     with patch("backend.api.company.database") as mock_db:
         mock_conn = AsyncMock()
         mock_db.acquire.return_value.__aenter__.return_value = mock_conn
-        mock_conn.fetchrow.return_value = {
+        mock_conn.fetch.return_value = [{
             "id": company_id,
             "name": "Test Co",
             "email": "test@co.com",
             "website": "test.com",
             "industry": "Tech",
             "description": "A tech co"
-        }
+        }]
 
         response = client.get("/api/company/me")
         
@@ -44,7 +44,7 @@ def test_get_my_company_not_found():
     with patch("backend.api.company.database") as mock_db:
         mock_conn = AsyncMock()
         mock_db.acquire.return_value.__aenter__.return_value = mock_conn
-        mock_conn.fetchrow.return_value = None
+        mock_conn.fetch.return_value = []
 
         response = client.get("/api/company/me")
         
@@ -65,14 +65,14 @@ def test_onboarding_updates_profile_and_writes_typed_memories(
     app.dependency_overrides[get_current_company_id] = lambda: company_id
     mock_conn = AsyncMock()
     mock_db.acquire.return_value.__aenter__.return_value = mock_conn
-    mock_conn.fetchrow.return_value = {
+    mock_conn.fetch.return_value = [{
         "id": company_id,
         "name": "Test Co",
         "email": "test@co.com",
         "website": "https://test.co",
         "industry": "SaaS",
         "description": "Testing GTM",
-    }
+    }]
     repository = AsyncMock()
     mock_repository_class.return_value = repository
 
@@ -109,14 +109,14 @@ def test_onboarding_reports_embedding_failure(
     app.dependency_overrides[get_current_company_id] = lambda: company_id
     mock_conn = AsyncMock()
     mock_db.acquire.return_value.__aenter__.return_value = mock_conn
-    mock_conn.fetchrow.return_value = {
+    mock_conn.fetch.return_value = [{
         "id": company_id,
         "name": "Test Co",
         "email": "test@co.com",
         "website": None,
         "industry": None,
         "description": None,
-    }
+    }]
     mock_repository_class.return_value.write = AsyncMock(
         side_effect=RuntimeError("Bedrock unavailable"),
     )

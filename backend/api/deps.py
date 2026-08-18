@@ -4,7 +4,7 @@ from uuid import UUID
 from fastapi import HTTPException, Request, status
 
 from backend.api.auth import get_presented_session_token, hash_session_token
-from backend.database.database import database
+from backend.database.database import database, fetch_one
 
 
 async def get_current_company_id(request: Request) -> UUID:
@@ -32,7 +32,7 @@ async def get_current_company_id(request: Request) -> UUID:
     """
 
     async with database.acquire() as conn:
-        row = await conn.fetchrow(query, token_hash)
+        row = await fetch_one(conn, query, token_hash)
 
         if row and row["expires_at"] <= datetime.now(timezone.utc):
             await conn.execute(
