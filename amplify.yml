@@ -1,0 +1,27 @@
+# AWS Amplify Hosting — frontend (Vite static build).
+#
+# VITE_API_BASE_URL must be set in the Amplify console under
+# App settings -> Environment variables. Vite inlines it at build time, so
+# changing it requires a redeploy, not just a restart.
+#
+# React Router needs a rewrite rule so deep links do not 404. In the Amplify
+# console under Rewrites and redirects, add:
+#   Source: /<*>   Target: /index.html   Type: 200 (Rewrite)
+version: 1
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - "**/*"
+      cache:
+        paths:
+          - node_modules/**/*
