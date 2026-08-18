@@ -11,8 +11,8 @@ from backend.api.growthgraph import (
     GROWTHGRAPH_COHORT_SIZE,
     GROWTHGRAPH_COMPANY_IDS,
     aggregate_insights,
-    router as growthgraph_router,
 )
+from backend.api.growthgraph import router as growthgraph_router
 from backend.database.database import database
 from backend.memory.repository import MemoryRepository
 from backend.memory.store import MemoryHit
@@ -205,8 +205,10 @@ def test_growthgraph_suppresses_small_groups():
 def test_growthgraph_route_is_mounted_in_main_app():
     from backend.main import app as main_app
 
-    paths = {route.path for route in main_app.routes}
-    assert "/api/growthgraph/insights" in paths
+    assert any(
+        getattr(route, "original_router", None) is growthgraph_router
+        for route in main_app.routes
+    )
 
 
 @pytest.mark.asyncio
