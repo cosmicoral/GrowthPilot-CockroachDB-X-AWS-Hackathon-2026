@@ -1,4 +1,3 @@
-```bash
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
 # infra/ccloud.sh — CockroachDB Cloud CLI wrapper for GrowthPilot
@@ -263,4 +262,3 @@ main() {
 }
 
 main "$@"
-```
